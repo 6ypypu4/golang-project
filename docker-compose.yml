@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+      args:
+        GO_VERSION: "1.22"
+    ports:
+      - "8080:8080"
+    environment:
+      # Example placeholders; override via .env or compose overrides
+      - PORT=8080
+    depends_on:
+      - db
+
+  admin:
+    build:
+      context: .
+      target: admin
+      args:
+        GO_VERSION: "1.22"
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:
+

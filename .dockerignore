@@ -1,0 +1,26 @@
+# Build artifacts
+bin/
+out/
+*.exe
+*.test
+
+# Git
+.git
+.gitignore
+
+# IDE / OS
+.idea
+.vscode
+*.swp
+*.DS_Store
+
+# Dependencies / caches
+vendor/
+node_modules/
+
+# Local env
+.env
+*.log
+tmp/
+coverage/
+
