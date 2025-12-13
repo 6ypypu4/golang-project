@@ -11,6 +11,7 @@ import (
 
 	"golang-project/internal/database"
 	"golang-project/internal/handler"
+	"golang-project/internal/repository"
 )
 
 type Config struct {
@@ -69,7 +70,11 @@ func main() {
 		}
 	}()
 
-	router := handler.SetupRoutes()
+	// Создаём репозитории
+	repos := repository.NewRepositories(database.DB)
+
+	// Настраиваем роуты с репозиториями
+	router := handler.SetupRoutes(repos)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
