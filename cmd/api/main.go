@@ -14,9 +14,10 @@ import (
 )
 
 type Config struct {
-	Port      string
-	DBDsn     string
-	JWTSecret string
+	Port           string
+	DBDsn          string
+	JWTSecret      string
+	MigrationsPath string
 }
 
 func loadConfig() (*Config, error) {
@@ -35,10 +36,16 @@ func loadConfig() (*Config, error) {
 		return nil, ErrMissingEnv("JWT_SECRET")
 	}
 
+	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	if migrationsPath == "" {
+		migrationsPath = "internal/migrations"
+	}
+
 	return &Config{
-		Port:      port,
-		DBDsn:     dsn,
-		JWTSecret: secret,
+		Port:           port,
+		DBDsn:          dsn,
+		JWTSecret:      secret,
+		MigrationsPath: migrationsPath,
 	}, nil
 }
 
@@ -69,7 +76,11 @@ func main() {
 		}
 	}()
 
-	router := handler.SetupRoutes()
+	if err := database.RunMigrations(cfg.MigrationsPath); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+
+	router := handler.SetupRoutes(database.DB, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

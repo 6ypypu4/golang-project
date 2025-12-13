@@ -1,10 +1,29 @@
 package handler
 
-import "github.com/gin-gonic/gin"
+import (
+	"database/sql"
+	"net/http"
 
-func SetupRoutes() *gin.Engine {
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+
+	"golang-project/internal/repository"
+	"golang-project/internal/service"
+)
+
+func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	router := gin.Default()
-	// TODO: Setup routes
+
+	v := validator.New()
+	userRepo := repository.NewUserRepository(db)
+	authService := service.NewAuthService(userRepo, v, jwtSecret)
+	authHandler := NewAuthHandler(authService)
+
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.POST("/auth/register", authHandler.Register)
+	router.POST("/auth/login", authHandler.Login)
+
 	return router
 }
-
