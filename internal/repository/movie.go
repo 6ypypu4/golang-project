@@ -1,7 +1,10 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"golang-project/internal/models"
 
@@ -16,9 +19,10 @@ func NewMovieRepository(db *sql.DB) *MovieRepository {
 	return &MovieRepository{db: db}
 }
 
-func (r *MovieRepository) GetByID(id uuid.UUID) (*models.Movie, error) {
+func (r *MovieRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
 	var movie models.Movie
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		`SELECT id, title, description, release_year, director, duration_minutes, 
 		 average_rating, created_at, updated_at 
 		 FROM movies WHERE id = $1`,
@@ -34,19 +38,20 @@ func (r *MovieRepository) GetByID(id uuid.UUID) (*models.Movie, error) {
 	return &movie, nil
 }
 
-func (r *MovieRepository) Create(movie *models.Movie) error {
-	err := r.db.QueryRow(
+func (r *MovieRepository) Create(ctx context.Context, movie *models.Movie) error {
+	return r.db.QueryRowContext(
+		ctx,
 		`INSERT INTO movies (title, description, release_year, director, duration_minutes)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at, updated_at`,
 		movie.Title, movie.Description, movie.ReleaseYear,
 		movie.Director, movie.DurationMinutes,
 	).Scan(&movie.ID, &movie.CreatedAt, &movie.UpdatedAt)
-	return err
 }
 
-func (r *MovieRepository) Update(movie *models.Movie) error {
-	_, err := r.db.Exec(
+func (r *MovieRepository) Update(ctx context.Context, movie *models.Movie) error {
+	_, err := r.db.ExecContext(
+		ctx,
 		`UPDATE movies 
 		 SET title = $1, description = $2, release_year = $3, 
 		     director = $4, duration_minutes = $5, updated_at = NOW()
@@ -57,22 +62,59 @@ func (r *MovieRepository) Update(movie *models.Movie) error {
 	return err
 }
 
-func (r *MovieRepository) Delete(id uuid.UUID) error {
-	_, err := r.db.Exec("DELETE FROM movies WHERE id = $1", id)
+func (r *MovieRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM movies WHERE id = $1", id)
 	return err
 }
 
-func (r *MovieRepository) GetAll(limit, offset int) ([]models.Movie, error) {
-	rows, err := r.db.Query(
-		`SELECT id, title, description, release_year, director, duration_minutes,
-		 average_rating, created_at, updated_at
-		 FROM movies
-		 ORDER BY created_at DESC
-		 LIMIT $1 OFFSET $2`,
-		limit, offset,
+func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters, limit, offset int) ([]models.Movie, int, error) {
+	whereParts := []string{"1=1"}
+	args := []interface{}{}
+
+	if filters.GenreID != nil {
+		args = append(args, *filters.GenreID)
+		whereParts = append(whereParts, fmt.Sprintf("EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id AND mg.genre_id = $%d)", len(args)))
+	}
+	if filters.Genre != "" {
+		args = append(args, "%"+filters.Genre+"%")
+		whereParts = append(whereParts, fmt.Sprintf("EXISTS (SELECT 1 FROM genres g INNER JOIN movie_genres mg ON g.id = mg.genre_id WHERE mg.movie_id = m.id AND LOWER(g.name) LIKE LOWER($%d))", len(args)))
+	}
+	if filters.Year != 0 {
+		args = append(args, filters.Year)
+		whereParts = append(whereParts, fmt.Sprintf("m.release_year = $%d", len(args)))
+	}
+	if filters.MinRating > 0 {
+		args = append(args, filters.MinRating)
+		whereParts = append(whereParts, fmt.Sprintf("m.average_rating >= $%d", len(args)))
+	}
+	if filters.Search != "" {
+		args = append(args, "%"+filters.Search+"%")
+		whereParts = append(whereParts, fmt.Sprintf("(LOWER(m.title) LIKE LOWER($%d) OR LOWER(m.description) LIKE LOWER($%d))", len(args), len(args)))
+	}
+
+	whereSQL := strings.Join(whereParts, " AND ")
+
+	countQuery := fmt.Sprintf(`SELECT COUNT(DISTINCT m.id) FROM movies m WHERE %s`, whereSQL)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	argsWithPage := append([]interface{}{}, args...)
+	argsWithPage = append(argsWithPage, limit, offset)
+
+	query := fmt.Sprintf(
+		`SELECT DISTINCT m.id, m.title, m.description, m.release_year, m.director, m.duration_minutes,
+		        m.average_rating, m.created_at, m.updated_at
+		 FROM movies m
+		 WHERE %s
+		 ORDER BY m.created_at DESC
+		 LIMIT $%d OFFSET $%d`,
+		whereSQL, len(args)+1, len(args)+2,
 	)
+	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -84,15 +126,28 @@ func (r *MovieRepository) GetAll(limit, offset int) ([]models.Movie, error) {
 			&movie.Director, &movie.DurationMinutes, &movie.AverageRating,
 			&movie.CreatedAt, &movie.UpdatedAt,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		movies = append(movies, movie)
 	}
-	return movies, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	for i := range movies {
+		genres, err := r.GetGenresByMovieID(ctx, movies[i].ID)
+		if err != nil {
+			return nil, 0, err
+		}
+		movies[i].Genres = genres
+	}
+
+	return movies, total, nil
 }
 
-func (r *MovieRepository) GetGenresByMovieID(movieID uuid.UUID) ([]models.Genre, error) {
-	rows, err := r.db.Query(
+func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
 		`SELECT g.id, g.name, g.created_at
 		 FROM genres g
 		 INNER JOIN movie_genres mg ON g.id = mg.genre_id
@@ -115,42 +170,19 @@ func (r *MovieRepository) GetGenresByMovieID(movieID uuid.UUID) ([]models.Genre,
 	return genres, rows.Err()
 }
 
-func (r *MovieRepository) AddGenre(movieID, genreID uuid.UUID) error {
-	_, err := r.db.Exec(
-		"INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-		movieID, genreID,
-	)
-	return err
-}
-
-func (r *MovieRepository) RemoveGenre(movieID, genreID uuid.UUID) error {
-	_, err := r.db.Exec(
-		"DELETE FROM movie_genres WHERE movie_id = $1 AND genre_id = $2",
-		movieID, genreID,
-	)
-	return err
-}
-
-func (r *MovieRepository) SetGenres(movieID uuid.UUID, genreIDs []uuid.UUID) error {
-	tx, err := r.db.Begin()
+func (r *MovieRepository) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error {
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	// Удаляем все существующие связи
-	_, err = tx.Exec("DELETE FROM movie_genres WHERE movie_id = $1", movieID)
-	if err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM movie_genres WHERE movie_id = $1", movieID); err != nil {
 		return err
 	}
 
-	// Добавляем новые связи
 	for _, genreID := range genreIDs {
-		_, err = tx.Exec(
-			"INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2)",
-			movieID, genreID,
-		)
-		if err != nil {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO movie_genres (movie_id, genre_id) VALUES ($1, $2)", movieID, genreID); err != nil {
 			return err
 		}
 	}
@@ -158,8 +190,9 @@ func (r *MovieRepository) SetGenres(movieID uuid.UUID, genreIDs []uuid.UUID) err
 	return tx.Commit()
 }
 
-func (r *MovieRepository) UpdateAverageRating(movieID uuid.UUID) error {
-	_, err := r.db.Exec(
+func (r *MovieRepository) UpdateAverageRating(ctx context.Context, movieID uuid.UUID) error {
+	_, err := r.db.ExecContext(
+		ctx,
 		`UPDATE movies 
 		 SET average_rating = (
 			 SELECT COALESCE(AVG(rating), 0)
@@ -172,8 +205,8 @@ func (r *MovieRepository) UpdateAverageRating(movieID uuid.UUID) error {
 	return err
 }
 
-func (r *MovieRepository) Count() (int, error) {
+func (r *MovieRepository) Count(ctx context.Context) (int, error) {
 	var count int
-	err := r.db.QueryRow("SELECT COUNT(*) FROM movies").Scan(&count)
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM movies").Scan(&count)
 	return count, err
 }
