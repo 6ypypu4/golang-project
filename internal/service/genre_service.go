@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"golang-project/internal/models"
-	"golang-project/internal/repository"
 )
 
 var (
@@ -17,12 +16,21 @@ var (
 	ErrGenreNotFound = errors.New("genre not found")
 )
 
+type GenreRepo interface {
+	GetAll(ctx context.Context) ([]models.Genre, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error)
+	GetByName(ctx context.Context, name string) (*models.Genre, error)
+	Create(ctx context.Context, genre *models.Genre) error
+	Update(ctx context.Context, genre *models.Genre) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
 type GenreService struct {
-	repo      *repository.GenreRepository
+	repo      GenreRepo
 	validator *validator.Validate
 }
 
-func NewGenreService(repo *repository.GenreRepository, v *validator.Validate) *GenreService {
+func NewGenreService(repo GenreRepo, v *validator.Validate) *GenreService {
 	return &GenreService{repo: repo, validator: v}
 }
 

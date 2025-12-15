@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"golang-project/internal/models"
-	"golang-project/internal/repository"
 )
 
 var (
@@ -17,13 +16,27 @@ var (
 	ErrNoGenresProvided = errors.New("at least one genre required")
 )
 
+type MovieRepo interface {
+	List(ctx context.Context, filters models.MovieFilters, limit, offset int) ([]models.Movie, int, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error)
+	Create(ctx context.Context, movie *models.Movie) error
+	Update(ctx context.Context, movie *models.Movie) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error
+	GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error)
+}
+
+type GenreLookup interface {
+	GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error)
+}
+
 type MovieService struct {
-	movies    *repository.MovieRepository
-	genres    *repository.GenreRepository
+	movies    MovieRepo
+	genres    GenreLookup
 	validator *validator.Validate
 }
 
-func NewMovieService(movies *repository.MovieRepository, genres *repository.GenreRepository, v *validator.Validate) *MovieService {
+func NewMovieService(movies MovieRepo, genres GenreLookup, v *validator.Validate) *MovieService {
 	return &MovieService{
 		movies:    movies,
 		genres:    genres,
