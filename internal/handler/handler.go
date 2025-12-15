@@ -23,10 +23,13 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 
 	genreRepo := repository.NewGenreRepository(db)
 	movieRepo := repository.NewMovieRepository(db)
+	reviewRepo := repository.NewReviewRepository(db)
 	genreService := service.NewGenreService(genreRepo, v)
 	movieService := service.NewMovieService(movieRepo, genreRepo, v)
+	reviewService := service.NewReviewService(reviewRepo, movieRepo, v)
 	genreHandler := NewGenreHandler(genreService)
 	movieHandler := NewMovieHandler(movieService)
+	reviewHandler := NewReviewHandler(reviewService)
 
 	public := router.Group("/")
 	public.GET("/health", func(c *gin.Context) {
@@ -38,6 +41,7 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	public.GET("/genres/:id", genreHandler.Get)
 	public.GET("/movies", movieHandler.List)
 	public.GET("/movies/:id", movieHandler.Get)
+	public.GET("/movies/:id/reviews", reviewHandler.ListByMovie)
 
 	protected := router.Group("/api", middleware.AuthMiddleware(jwtSecret))
 	protected.GET("/me", func(c *gin.Context) {
@@ -57,6 +61,10 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	admin.POST("/movies", movieHandler.Create)
 	admin.PUT("/movies/:id", movieHandler.Update)
 	admin.DELETE("/movies/:id", movieHandler.Delete)
+
+	protected.POST("/movies/:id/reviews", reviewHandler.Create)
+	protected.PUT("/reviews/:id", reviewHandler.Update)
+	protected.DELETE("/reviews/:id", reviewHandler.Delete)
 
 	return router
 }
