@@ -5,8 +5,6 @@ import (
 	"database/sql"
 
 	"golang-project/internal/models"
-
-	"github.com/google/uuid"
 )
 
 type GenreRepository struct {
@@ -17,7 +15,7 @@ func NewGenreRepository(db *sql.DB) *GenreRepository {
 	return &GenreRepository{db: db}
 }
 
-func (r *GenreRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (r *GenreRepository) GetByID(ctx context.Context, id int) (*models.Genre, error) {
 	var genre models.Genre
 	err := r.db.QueryRowContext(
 		ctx,
@@ -61,7 +59,7 @@ func (r *GenreRepository) Update(ctx context.Context, genre *models.Genre) error
 	return err
 }
 
-func (r *GenreRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *GenreRepository) Delete(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM genres WHERE id = $1", id)
 	return err
 }

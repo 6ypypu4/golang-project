@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"golang-project/internal/models"
-
-	"github.com/google/uuid"
 )
 
 type MovieRepository struct {
@@ -19,7 +17,7 @@ func NewMovieRepository(db *sql.DB) *MovieRepository {
 	return &MovieRepository{db: db}
 }
 
-func (r *MovieRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
+func (r *MovieRepository) GetByID(ctx context.Context, id int) (*models.Movie, error) {
 	var movie models.Movie
 	err := r.db.QueryRowContext(
 		ctx,
@@ -62,7 +60,7 @@ func (r *MovieRepository) Update(ctx context.Context, movie *models.Movie) error
 	return err
 }
 
-func (r *MovieRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *MovieRepository) Delete(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM movies WHERE id = $1", id)
 	return err
 }
@@ -145,7 +143,7 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 	return movies, total, nil
 }
 
-func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error) {
+func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
 		`SELECT g.id, g.name, g.created_at
@@ -170,7 +168,7 @@ func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID uuid.U
 	return genres, rows.Err()
 }
 
-func (r *MovieRepository) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error {
+func (r *MovieRepository) SetGenres(ctx context.Context, movieID int, genreIDs []int) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -190,7 +188,7 @@ func (r *MovieRepository) SetGenres(ctx context.Context, movieID uuid.UUID, genr
 	return tx.Commit()
 }
 
-func (r *MovieRepository) UpdateAverageRating(ctx context.Context, movieID uuid.UUID) error {
+func (r *MovieRepository) UpdateAverageRating(ctx context.Context, movieID int) error {
 	_, err := r.db.ExecContext(
 		ctx,
 		`UPDATE movies 
