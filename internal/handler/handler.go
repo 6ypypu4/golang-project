@@ -14,7 +14,7 @@ import (
 
 func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS())
+	router.Use(middleware.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS(), middleware.BodyLimit(1<<20))
 
 	v := validator.New()
 	userRepo := repository.NewUserRepository(db)
@@ -31,7 +31,9 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	movieHandler := NewMovieHandler(movieService)
 	reviewHandler := NewReviewHandler(reviewService)
 
-	public := router.Group("/")
+	api := router.Group("/api/v1")
+
+	public := api.Group("/")
 	public.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
@@ -43,7 +45,7 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	public.GET("/movies/:id", movieHandler.Get)
 	public.GET("/movies/:id/reviews", reviewHandler.ListByMovie)
 
-	protected := router.Group("/api", middleware.AuthMiddleware(jwtSecret))
+	protected := api.Group("/", middleware.AuthMiddleware(jwtSecret))
 	protected.GET("/me", func(c *gin.Context) {
 		userID, _ := c.Get(string(middleware.ContextUserID))
 		role, _ := c.Get(string(middleware.ContextRole))
@@ -52,8 +54,11 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 			"role":    role,
 		})
 	})
+	protected.POST("/movies/:id/reviews", reviewHandler.Create)
+	protected.PUT("/reviews/:id", reviewHandler.Update)
+	protected.DELETE("/reviews/:id", reviewHandler.Delete)
 
-	admin := protected.Group("/", middleware.RequireRoles("admin"))
+	admin := api.Group("/", middleware.AuthMiddleware(jwtSecret), middleware.RequireRoles("admin"))
 	admin.POST("/genres", genreHandler.Create)
 	admin.PUT("/genres/:id", genreHandler.Update)
 	admin.DELETE("/genres/:id", genreHandler.Delete)
@@ -61,10 +66,6 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	admin.POST("/movies", movieHandler.Create)
 	admin.PUT("/movies/:id", movieHandler.Update)
 	admin.DELETE("/movies/:id", movieHandler.Delete)
-
-	protected.POST("/movies/:id/reviews", reviewHandler.Create)
-	protected.PUT("/reviews/:id", reviewHandler.Update)
-	protected.DELETE("/reviews/:id", reviewHandler.Delete)
 
 	return router
 }
