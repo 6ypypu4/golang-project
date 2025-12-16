@@ -1,5 +1,5 @@
 ## Multi-stage build to produce lean images for both API and Admin binaries
-ARG GO_VERSION=1.22
+ARG GO_VERSION=1.24
 
 FROM golang:${GO_VERSION}-alpine AS base
 WORKDIR /app
@@ -10,7 +10,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the rest of the source
-COPY . .
+COPY . . 
 
 ENV CGO_ENABLED=0
 
@@ -33,4 +33,3 @@ COPY --from=build-admin /out/admin /admin
 USER nonroot:nonroot
 EXPOSE 8081
 ENTRYPOINT ["/admin"]
-
