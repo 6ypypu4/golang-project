@@ -1,6 +1,10 @@
 package main
 
-import "os"
+import (
+	"os"
+
+	"github.com/joho/godotenv"
+)
 
 type Config struct {
 	Port           string
@@ -16,6 +20,9 @@ func (e ErrMissingEnv) Error() string {
 }
 
 func loadConfig() (*Config, error) {
+	// Load .env file if it exists (silently ignore if not found)
+	_ = godotenv.Load()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
