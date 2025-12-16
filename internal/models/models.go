@@ -2,12 +2,10 @@ package models
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type User struct {
-	ID           uuid.UUID `json:"id" db:"id"`
+	ID           int       `json:"id" db:"id"`
 	Email        string    `json:"email" db:"email"`
 	Username     string    `json:"username" db:"username"`
 	PasswordHash string    `json:"-" db:"password_hash"`
@@ -17,13 +15,13 @@ type User struct {
 }
 
 type Genre struct {
-	ID        uuid.UUID `json:"id" db:"id"`
+	ID        int       `json:"id" db:"id"`
 	Name      string    `json:"name" db:"name"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 type Movie struct {
-	ID              uuid.UUID `json:"id" db:"id"`
+	ID              int       `json:"id" db:"id"`
 	Title           string    `json:"title" db:"title"`
 	Description     string    `json:"description" db:"description"`
 	ReleaseYear     int       `json:"release_year" db:"release_year"`
@@ -36,14 +34,14 @@ type Movie struct {
 }
 
 type MovieGenre struct {
-	MovieID uuid.UUID `json:"movie_id" db:"movie_id"`
-	GenreID uuid.UUID `json:"genre_id" db:"genre_id"`
+	MovieID int `json:"movie_id" db:"movie_id"`
+	GenreID int `json:"genre_id" db:"genre_id"`
 }
 
 type Review struct {
-	ID        uuid.UUID `json:"id" db:"id"`
-	MovieID   uuid.UUID `json:"movie_id" db:"movie_id"`
-	UserID    uuid.UUID `json:"user_id" db:"user_id"`
+	ID        int       `json:"id" db:"id"`
+	MovieID   int       `json:"movie_id" db:"movie_id"`
+	UserID    int       `json:"user_id" db:"user_id"`
 	Rating    int       `json:"rating" db:"rating"`
 	Title     string    `json:"title" db:"title"`
 	Content   string    `json:"content" db:"content"`
@@ -104,11 +102,11 @@ type PaginationParams struct {
 }
 
 type MovieFilters struct {
-	Genre     string     `json:"genre"`
-	GenreID   *uuid.UUID `json:"-"`
-	Year      int        `json:"year"`
-	MinRating float64    `json:"min_rating"`
-	Search    string     `json:"search"`
+	Genre     string  `json:"genre"`
+	GenreID   *int    `json:"-"`
+	Year      int     `json:"year"`
+	MinRating float64 `json:"min_rating"`
+	Search    string  `json:"search"`
 }
 
 type PaginatedResponse struct {
