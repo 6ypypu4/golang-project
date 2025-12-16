@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 )
@@ -17,17 +16,17 @@ var (
 )
 
 type ReviewRepo interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Review, error)
-	GetByMovieAndUser(ctx context.Context, movieID, userID uuid.UUID) (*models.Review, error)
-	GetByMovieID(ctx context.Context, movieID uuid.UUID, limit, offset int) ([]models.Review, error)
+	GetByID(ctx context.Context, id int) (*models.Review, error)
+	GetByMovieAndUser(ctx context.Context, movieID, userID int) (*models.Review, error)
+	GetByMovieID(ctx context.Context, movieID int, limit, offset int) ([]models.Review, error)
 	Create(ctx context.Context, review *models.Review) error
 	Update(ctx context.Context, review *models.Review) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id int) error
 }
 
 type MovieLookup interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error)
-	UpdateAverageRating(ctx context.Context, movieID uuid.UUID) error
+	GetByID(ctx context.Context, id int) (*models.Movie, error)
+	UpdateAverageRating(ctx context.Context, movieID int) error
 }
 
 type ReviewService struct {
@@ -44,7 +43,7 @@ func NewReviewService(reviews ReviewRepo, movies MovieLookup, v *validator.Valid
 	}
 }
 
-func (s *ReviewService) ListByMovie(ctx context.Context, movieID uuid.UUID, page, limit int) ([]models.Review, error) {
+func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, page, limit int) ([]models.Review, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -55,7 +54,7 @@ func (s *ReviewService) ListByMovie(ctx context.Context, movieID uuid.UUID, page
 	return s.reviews.GetByMovieID(ctx, movieID, limit, offset)
 }
 
-func (s *ReviewService) Create(ctx context.Context, movieID, userID uuid.UUID, req models.CreateReviewRequest) (*models.Review, error) {
+func (s *ReviewService) Create(ctx context.Context, movieID, userID int, req models.CreateReviewRequest) (*models.Review, error) {
 	if err := s.validator.Struct(req); err != nil {
 		return nil, err
 	}
@@ -88,7 +87,7 @@ func (s *ReviewService) Create(ctx context.Context, movieID, userID uuid.UUID, r
 	return review, nil
 }
 
-func (s *ReviewService) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, req models.UpdateReviewRequest) (*models.Review, error) {
+func (s *ReviewService) Update(ctx context.Context, id int, userID int, req models.UpdateReviewRequest) (*models.Review, error) {
 	review, err := s.reviews.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -117,7 +116,7 @@ func (s *ReviewService) Update(ctx context.Context, id uuid.UUID, userID uuid.UU
 	return review, nil
 }
 
-func (s *ReviewService) Delete(ctx context.Context, id uuid.UUID, requester uuid.UUID, isAdmin bool) error {
+func (s *ReviewService) Delete(ctx context.Context, id int, requester int, isAdmin bool) error {
 	review, err := s.reviews.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

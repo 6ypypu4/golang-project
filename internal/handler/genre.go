@@ -2,9 +2,9 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/internal/service"
@@ -28,7 +28,8 @@ func (h *GenreHandler) List(c *gin.Context) {
 }
 
 func (h *GenreHandler) Get(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -65,7 +66,8 @@ func (h *GenreHandler) Create(c *gin.Context) {
 }
 
 func (h *GenreHandler) Update(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -91,7 +93,8 @@ func (h *GenreHandler) Update(c *gin.Context) {
 }
 
 func (h *GenreHandler) Delete(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return

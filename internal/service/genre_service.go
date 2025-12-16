@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 )
@@ -18,11 +17,11 @@ var (
 
 type GenreRepo interface {
 	GetAll(ctx context.Context) ([]models.Genre, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error)
+	GetByID(ctx context.Context, id int) (*models.Genre, error)
 	GetByName(ctx context.Context, name string) (*models.Genre, error)
 	Create(ctx context.Context, genre *models.Genre) error
 	Update(ctx context.Context, genre *models.Genre) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id int) error
 }
 
 type GenreService struct {
@@ -38,7 +37,7 @@ func (s *GenreService) List(ctx context.Context) ([]models.Genre, error) {
 	return s.repo.GetAll(ctx)
 }
 
-func (s *GenreService) Get(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (s *GenreService) Get(ctx context.Context, id int) (*models.Genre, error) {
 	genre, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -67,7 +66,7 @@ func (s *GenreService) Create(ctx context.Context, req models.CreateGenreRequest
 	return genre, nil
 }
 
-func (s *GenreService) Update(ctx context.Context, id uuid.UUID, req models.CreateGenreRequest) (*models.Genre, error) {
+func (s *GenreService) Update(ctx context.Context, id int, req models.CreateGenreRequest) (*models.Genre, error) {
 	if err := s.validator.Struct(req); err != nil {
 		return nil, err
 	}
@@ -87,7 +86,7 @@ func (s *GenreService) Update(ctx context.Context, id uuid.UUID, req models.Crea
 	return genre, nil
 }
 
-func (s *GenreService) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *GenreService) Delete(ctx context.Context, id int) error {
 	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrGenreNotFound

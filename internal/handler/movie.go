@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/internal/service"
@@ -37,8 +36,8 @@ func (h *MovieHandler) List(c *gin.Context) {
 		}
 	}
 	if genreIDStr := c.Query("genre_id"); genreIDStr != "" {
-		if gid, err := uuid.Parse(genreIDStr); err == nil {
-			filters.GenreID = &gid
+		if genreID, err := strconv.Atoi(genreIDStr); err == nil {
+			filters.GenreID = &genreID
 		}
 	}
 
@@ -51,7 +50,8 @@ func (h *MovieHandler) List(c *gin.Context) {
 }
 
 func (h *MovieHandler) Get(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -90,7 +90,8 @@ func (h *MovieHandler) Create(c *gin.Context) {
 }
 
 func (h *MovieHandler) Update(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -119,7 +120,8 @@ func (h *MovieHandler) Update(c *gin.Context) {
 }
 
 func (h *MovieHandler) Delete(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return

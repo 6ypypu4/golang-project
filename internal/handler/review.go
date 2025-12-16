@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"golang-project/internal/middleware"
 	"golang-project/internal/models"
@@ -21,7 +20,8 @@ func NewReviewHandler(s *service.ReviewService) *ReviewHandler {
 }
 
 func (h *ReviewHandler) ListByMovie(c *gin.Context) {
-	movieID, err := uuid.Parse(c.Param("id"))
+	movieIDStr := c.Param("id")
+	movieID, err := strconv.Atoi(movieIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
 		return
@@ -38,13 +38,14 @@ func (h *ReviewHandler) ListByMovie(c *gin.Context) {
 }
 
 func (h *ReviewHandler) Create(c *gin.Context) {
-	movieID, err := uuid.Parse(c.Param("id"))
+	movieIDStr := c.Param("id")
+	movieID, err := strconv.Atoi(movieIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
 		return
 	}
 	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userUUID, err := uuid.Parse(userIDStr.(string))
+	userID, err := strconv.Atoi(userIDStr.(string))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
@@ -56,7 +57,7 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 		return
 	}
 
-	review, err := h.service.Create(c.Request.Context(), movieID, userUUID, req)
+	review, err := h.service.Create(c.Request.Context(), movieID, userID, req)
 	if err != nil {
 		switch err {
 		case service.ErrMovieNotFound:
@@ -72,13 +73,14 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 }
 
 func (h *ReviewHandler) Update(c *gin.Context) {
-	reviewID, err := uuid.Parse(c.Param("id"))
+	reviewIDStr := c.Param("id")
+	reviewID, err := strconv.Atoi(reviewIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review id"})
 		return
 	}
 	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userUUID, err := uuid.Parse(userIDStr.(string))
+	userID, err := strconv.Atoi(userIDStr.(string))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
@@ -90,7 +92,7 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		return
 	}
 
-	review, err := h.service.Update(c.Request.Context(), reviewID, userUUID, req)
+	review, err := h.service.Update(c.Request.Context(), reviewID, userID, req)
 	if err != nil {
 		switch err {
 		case service.ErrReviewNotFound:
@@ -106,13 +108,14 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 }
 
 func (h *ReviewHandler) Delete(c *gin.Context) {
-	reviewID, err := uuid.Parse(c.Param("id"))
+	reviewIDStr := c.Param("id")
+	reviewID, err := strconv.Atoi(reviewIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review id"})
 		return
 	}
 	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userUUID, err := uuid.Parse(userIDStr.(string))
+	userID, err := strconv.Atoi(userIDStr.(string))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
@@ -120,7 +123,7 @@ func (h *ReviewHandler) Delete(c *gin.Context) {
 	roleVal, _ := c.Get(string(middleware.ContextRole))
 	isAdmin := roleVal == "admin"
 
-	if err := h.service.Delete(c.Request.Context(), reviewID, userUUID, isAdmin); err != nil {
+	if err := h.service.Delete(c.Request.Context(), reviewID, userID, isAdmin); err != nil {
 		switch err {
 		case service.ErrReviewNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": "review not found"})

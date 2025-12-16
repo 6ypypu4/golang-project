@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-playground/validator/v10"
+
 	"golang-project/internal/models"
 	"golang-project/internal/repository"
 	"golang-project/pkg/jwt"
@@ -60,7 +62,7 @@ func (s *AuthService) Register(ctx context.Context, req models.CreateUserRequest
 		return nil, "", err
 	}
 
-	token, err := jwt.Generate(user.ID.String(), user.Role, s.jwtSecret, s.tokenTTL)
+	token, err := jwt.Generate(fmt.Sprintf("%d", user.ID), user.Role, s.jwtSecret, s.tokenTTL)
 	if err != nil {
 		return nil, "", err
 	}
@@ -85,7 +87,7 @@ func (s *AuthService) Login(ctx context.Context, req models.LoginRequest) (*mode
 		return nil, "", ErrInvalidCredentials
 	}
 
-	token, err := jwt.Generate(user.ID.String(), user.Role, s.jwtSecret, s.tokenTTL)
+	token, err := jwt.Generate(fmt.Sprintf("%d", user.ID), user.Role, s.jwtSecret, s.tokenTTL)
 	if err != nil {
 		return nil, "", err
 	}
