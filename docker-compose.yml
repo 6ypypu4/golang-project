@@ -10,8 +10,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Example placeholders; override via .env or compose overrides
       - PORT=8080
+      - DB_DSN=postgres://app:app@db:5432/app?sslmode=disable
+      - JWT_SECRET=changeme
+      - MIGRATIONS_PATH=internal/migrations
     depends_on:
       - db
 
@@ -25,6 +27,9 @@ services:
       - "8081:8081"
     environment:
       - PORT=8081
+      - DB_DSN=postgres://app:app@db:5432/app?sslmode=disable
+      - JWT_SECRET=changeme
+      - MIGRATIONS_PATH=internal/migrations
     depends_on:
       - db
 
@@ -42,4 +47,3 @@ services:
 
 volumes:
   pgdata:
-

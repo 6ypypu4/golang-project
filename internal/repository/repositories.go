@@ -4,15 +4,15 @@ import (
 	"database/sql"
 )
 
-// Repositories хранит все репозитории
+// Repositories С:С?Р°Р?РёС' Р?С?Рч С?РчРїР?Р·РёС'Р?С?РёРё
 type Repositories struct {
-	User   *UserRepository
+	User   UserRepository
 	Movie  *MovieRepository
 	Genre  *GenreRepository
 	Review *ReviewRepository
 }
 
-// NewRepositories создаёт и возвращает все репозитории
+// NewRepositories С?Р?Р·Р?Р°С'С' Рё Р?Р?Р·Р?С?Р°С%Р°РчС' Р?С?Рч С?РчРїР?Р·РёС'Р?С?РёРё
 func NewRepositories(db *sql.DB) *Repositories {
 	return &Repositories{
 		User:   NewUserRepository(db),

@@ -11,13 +11,13 @@ import (
 
 	"golang-project/internal/database"
 	"golang-project/internal/handler"
-	"golang-project/internal/repository"
 )
 
 type Config struct {
-	Port      string
-	DBDsn     string
-	JWTSecret string
+	Port           string
+	DBDsn          string
+	JWTSecret      string
+	MigrationsPath string
 }
 
 func loadConfig() (*Config, error) {
@@ -36,10 +36,16 @@ func loadConfig() (*Config, error) {
 		return nil, ErrMissingEnv("JWT_SECRET")
 	}
 
+	migrationsPath := os.Getenv("MIGRATIONS_PATH")
+	if migrationsPath == "" {
+		migrationsPath = "internal/migrations"
+	}
+
 	return &Config{
-		Port:      port,
-		DBDsn:     dsn,
-		JWTSecret: secret,
+		Port:           port,
+		DBDsn:          dsn,
+		JWTSecret:      secret,
+		MigrationsPath: migrationsPath,
 	}, nil
 }
 
@@ -70,11 +76,11 @@ func main() {
 		}
 	}()
 
-	// Создаём репозитории
-	repos := repository.NewRepositories(database.DB)
+	if err := database.RunMigrations(cfg.MigrationsPath); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
 
-	// Настраиваем роуты с репозиториями
-	router := handler.SetupRoutes(repos)
+	router := handler.SetupRoutes(database.DB, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
