@@ -352,21 +352,23 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	reviewH := handler.NewReviewHandler(reviewSvc)
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS())
+	router.Use(middleware.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS(), middleware.BodyLimit(1<<20))
 
-	router.POST("/auth/register", authH.Register)
-	router.POST("/auth/login", authH.Login)
-	router.GET("/genres", genreH.List)
-	router.GET("/genres/:id", genreH.Get)
-	router.GET("/movies", movieH.List)
-	router.GET("/movies/:id", movieH.Get)
-	router.GET("/movies/:id/reviews", reviewH.ListByMovie)
+	api := router.Group("/api/v1")
 
-	admin := router.Group("/", middleware.AuthMiddleware(secret), middleware.RequireRoles("admin"))
+	api.POST("/auth/register", authH.Register)
+	api.POST("/auth/login", authH.Login)
+	api.GET("/genres", genreH.List)
+	api.GET("/genres/:id", genreH.Get)
+	api.GET("/movies", movieH.List)
+	api.GET("/movies/:id", movieH.Get)
+	api.GET("/movies/:id/reviews", reviewH.ListByMovie)
+
+	admin := api.Group("/", middleware.AuthMiddleware(secret), middleware.RequireRoles("admin"))
 	admin.POST("/genres", genreH.Create)
 	admin.POST("/movies", movieH.Create)
 
-	protected := router.Group("/", middleware.AuthMiddleware(secret))
+	protected := api.Group("/", middleware.AuthMiddleware(secret))
 	protected.POST("/movies/:id/reviews", reviewH.Create)
 	protected.PUT("/reviews/:id", reviewH.Update)
 	protected.DELETE("/reviews/:id", reviewH.Delete)
@@ -414,7 +416,7 @@ func TestIntegration_Flow(t *testing.T) {
 
 func login(t *testing.T, r *gin.Engine, email, password string) string {
 	body, _ := json.Marshal(models.LoginRequest{Email: email, Password: password})
-	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -432,7 +434,7 @@ func login(t *testing.T, r *gin.Engine, email, password string) string {
 
 func register(t *testing.T, r *gin.Engine, email, username, password string) {
 	body, _ := json.Marshal(models.CreateUserRequest{Email: email, Username: username, Password: password})
-	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -443,7 +445,7 @@ func register(t *testing.T, r *gin.Engine, email, username, password string) {
 
 func createGenre(t *testing.T, r *gin.Engine, token, name string) string {
 	body, _ := json.Marshal(models.CreateGenreRequest{Name: name})
-	req := httptest.NewRequest(http.MethodPost, "/genres", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/genres", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -465,7 +467,7 @@ func createMovie(t *testing.T, r *gin.Engine, token, title, genreID string) stri
 		DurationMinutes: 100,
 		GenreIDs:        []string{genreID},
 	})
-	req := httptest.NewRequest(http.MethodPost, "/movies", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/movies", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -482,7 +484,7 @@ func createMovie(t *testing.T, r *gin.Engine, token, title, genreID string) stri
 
 func createReview(t *testing.T, r *gin.Engine, token, movieID string, rating int, title, content string) string {
 	body, _ := json.Marshal(models.CreateReviewRequest{Rating: rating, Title: title, Content: content})
-	req := httptest.NewRequest(http.MethodPost, "/movies/"+movieID+"/reviews", bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/movies/"+movieID+"/reviews", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -499,7 +501,7 @@ func createReview(t *testing.T, r *gin.Engine, token, movieID string, rating int
 
 func updateReview(t *testing.T, r *gin.Engine, token, reviewID string, rating int, title, content string) {
 	body, _ := json.Marshal(models.UpdateReviewRequest{Rating: rating, Title: title, Content: content})
-	req := httptest.NewRequest(http.MethodPut, "/reviews/"+reviewID, bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/reviews/"+reviewID, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
@@ -510,7 +512,7 @@ func updateReview(t *testing.T, r *gin.Engine, token, reviewID string, rating in
 }
 
 func deleteReview(t *testing.T, r *gin.Engine, token, reviewID string) {
-	req := httptest.NewRequest(http.MethodDelete, "/reviews/"+reviewID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/reviews/"+reviewID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
