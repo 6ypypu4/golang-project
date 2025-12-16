@@ -20,6 +20,7 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	userRepo := repository.NewUserRepository(db)
 	authService := service.NewAuthService(userRepo, v, jwtSecret)
 	authHandler := NewAuthHandler(authService)
+	userService := service.NewUserService(userRepo, v)
 
 	genreRepo := repository.NewGenreRepository(db)
 	movieRepo := repository.NewMovieRepository(db)
@@ -30,6 +31,7 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	genreHandler := NewGenreHandler(genreService)
 	movieHandler := NewMovieHandler(movieService)
 	reviewHandler := NewReviewHandler(reviewService)
+	userHandler := NewUserHandler(userService, reviewService)
 
 	api := router.Group("/api/v1")
 
@@ -46,19 +48,18 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	public.GET("/movies/:id/reviews", reviewHandler.ListByMovie)
 
 	protected := api.Group("/", middleware.AuthMiddleware(jwtSecret))
-	protected.GET("/me", func(c *gin.Context) {
-		userID, _ := c.Get(string(middleware.ContextUserID))
-		role, _ := c.Get(string(middleware.ContextRole))
-		c.JSON(http.StatusOK, gin.H{
-			"user_id": userID,
-			"role":    role,
-		})
-	})
+	protected.GET("/me", userHandler.Me)
+	protected.GET("/me/reviews", userHandler.MyReviews)
 	protected.POST("/movies/:id/reviews", reviewHandler.Create)
 	protected.PUT("/reviews/:id", reviewHandler.Update)
 	protected.DELETE("/reviews/:id", reviewHandler.Delete)
 
+	api.GET("/users/:id/reviews", userHandler.UserReviews)
+
 	admin := api.Group("/", middleware.AuthMiddleware(jwtSecret), middleware.RequireRoles("admin"))
+	admin.GET("/users", userHandler.ListUsers)
+	admin.GET("/users/:id", userHandler.GetUser)
+	admin.PUT("/users/:id/role", userHandler.UpdateRole)
 	admin.POST("/genres", genreHandler.Create)
 	admin.PUT("/genres/:id", genreHandler.Update)
 	admin.DELETE("/genres/:id", genreHandler.Delete)

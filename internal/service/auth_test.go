@@ -41,6 +41,41 @@ func (r *memoryUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 	return nil, sql.ErrNoRows
 }
 
+func (r *memoryUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	for _, u := range r.users {
+		if u.ID == id {
+			return u, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
+	result := make([]models.User, 0, len(r.users))
+	for _, u := range r.users {
+		result = append(result, *u)
+	}
+	total := len(result)
+	if offset >= total {
+		return []models.User{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return result[offset:end], total, nil
+}
+
+func (r *memoryUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+	for _, u := range r.users {
+		if u.ID == id {
+			u.Role = role
+			return nil
+		}
+	}
+	return sql.ErrNoRows
+}
+
 func TestAuthService_Register(t *testing.T) {
 	secret := "test-secret"
 	repo := newMemoryUserRepo()

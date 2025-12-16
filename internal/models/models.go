@@ -111,6 +111,11 @@ type MovieFilters struct {
 	Search    string     `json:"search"`
 }
 
+type ReviewFilters struct {
+	MinRating int `json:"min_rating"`
+	MaxRating int `json:"max_rating"`
+}
+
 type PaginatedResponse struct {
 	Data       interface{} `json:"data"`
 	Total      int         `json:"total"`

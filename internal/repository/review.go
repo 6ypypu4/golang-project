@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"golang-project/internal/models"
 
@@ -34,15 +35,33 @@ func (r *ReviewRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.R
 	return &review, nil
 }
 
-func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID, limit, offset int) ([]models.Review, error) {
+func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
+	args := []interface{}{movieID}
+	where := "movie_id = $1"
+	argPos := 2
+	if filters.MinRating > 0 {
+		where += fmt.Sprintf(" AND rating >= $%d", argPos)
+		args = append(args, filters.MinRating)
+		argPos++
+	}
+	if filters.MaxRating > 0 {
+		where += fmt.Sprintf(" AND rating <= $%d", argPos)
+		args = append(args, filters.MaxRating)
+		argPos++
+	}
+	args = append(args, limit, offset)
+
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE movie_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		movieID, limit, offset,
+		fmt.Sprintf(
+			`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+			 FROM reviews
+			 WHERE %s
+			 ORDER BY created_at DESC
+			 LIMIT $%d OFFSET $%d`,
+			where, argPos, argPos+1,
+		),
+		args...,
 	)
 	if err != nil {
 		return nil, err
@@ -63,15 +82,33 @@ func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID, 
 	return reviews, rows.Err()
 }
 
-func (r *ReviewRepository) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Review, error) {
+func (r *ReviewRepository) GetByUserID(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
+	args := []interface{}{userID}
+	where := "user_id = $1"
+	argPos := 2
+	if filters.MinRating > 0 {
+		where += fmt.Sprintf(" AND rating >= $%d", argPos)
+		args = append(args, filters.MinRating)
+		argPos++
+	}
+	if filters.MaxRating > 0 {
+		where += fmt.Sprintf(" AND rating <= $%d", argPos)
+		args = append(args, filters.MaxRating)
+		argPos++
+	}
+	args = append(args, limit, offset)
+
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		userID, limit, offset,
+		fmt.Sprintf(
+			`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+			 FROM reviews
+			 WHERE %s
+			 ORDER BY created_at DESC
+			 LIMIT $%d OFFSET $%d`,
+			where, argPos, argPos+1,
+		),
+		args...,
 	)
 	if err != nil {
 		return nil, err

@@ -19,7 +19,9 @@ var (
 type ReviewRepo interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Review, error)
 	GetByMovieAndUser(ctx context.Context, movieID, userID uuid.UUID) (*models.Review, error)
-	GetByMovieID(ctx context.Context, movieID uuid.UUID, limit, offset int) ([]models.Review, error)
+	GetByMovieID(ctx context.Context, movieID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error)
+	GetByUserID(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error)
+	CountByUserID(ctx context.Context, userID uuid.UUID) (int, error)
 	Create(ctx context.Context, review *models.Review) error
 	Update(ctx context.Context, review *models.Review) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -44,7 +46,7 @@ func NewReviewService(reviews ReviewRepo, movies MovieLookup, v *validator.Valid
 	}
 }
 
-func (s *ReviewService) ListByMovie(ctx context.Context, movieID uuid.UUID, page, limit int) ([]models.Review, error) {
+func (s *ReviewService) ListByMovie(ctx context.Context, movieID uuid.UUID, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -52,7 +54,22 @@ func (s *ReviewService) ListByMovie(ctx context.Context, movieID uuid.UUID, page
 		limit = 10
 	}
 	offset := (page - 1) * limit
-	return s.reviews.GetByMovieID(ctx, movieID, limit, offset)
+	return s.reviews.GetByMovieID(ctx, movieID, filters, limit, offset)
+}
+
+func (s *ReviewService) ListByUser(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+	return s.reviews.GetByUserID(ctx, userID, filters, limit, offset)
+}
+
+func (s *ReviewService) CountByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	return s.reviews.CountByUserID(ctx, userID)
 }
 
 func (s *ReviewService) Create(ctx context.Context, movieID, userID uuid.UUID, req models.CreateReviewRequest) (*models.Review, error) {
