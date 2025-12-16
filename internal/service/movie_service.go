@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 )
@@ -18,16 +18,16 @@ var (
 
 type MovieRepo interface {
 	List(ctx context.Context, filters models.MovieFilters, limit, offset int) ([]models.Movie, int, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error)
+	GetByID(ctx context.Context, id int) (*models.Movie, error)
 	Create(ctx context.Context, movie *models.Movie) error
 	Update(ctx context.Context, movie *models.Movie) error
-	Delete(ctx context.Context, id uuid.UUID) error
-	SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error
-	GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error)
+	Delete(ctx context.Context, id int) error
+	SetGenres(ctx context.Context, movieID int, genreIDs []int) error
+	GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error)
 }
 
 type GenreLookup interface {
-	GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error)
+	GetByID(ctx context.Context, id int) (*models.Genre, error)
 }
 
 type MovieService struct {
@@ -68,7 +68,7 @@ func (s *MovieService) List(ctx context.Context, filters models.MovieFilters, pa
 	}, nil
 }
 
-func (s *MovieService) Get(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
+func (s *MovieService) Get(ctx context.Context, id int) (*models.Movie, error) {
 	movie, err := s.movies.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -93,7 +93,7 @@ func (s *MovieService) Create(ctx context.Context, req models.CreateMovieRequest
 		return nil, ErrNoGenresProvided
 	}
 
-	genreUUIDs, err := s.validateGenreIDs(ctx, req.GenreIDs)
+	genreIDs, err := s.validateGenreIDs(ctx, req.GenreIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -109,11 +109,11 @@ func (s *MovieService) Create(ctx context.Context, req models.CreateMovieRequest
 	if err := s.movies.Create(ctx, movie); err != nil {
 		return nil, err
 	}
-	if err := s.movies.SetGenres(ctx, movie.ID, genreUUIDs); err != nil {
+	if err := s.movies.SetGenres(ctx, movie.ID, genreIDs); err != nil {
 		return nil, err
 	}
-	movie.Genres = make([]models.Genre, 0, len(genreUUIDs))
-	for _, gid := range genreUUIDs {
+	movie.Genres = make([]models.Genre, 0, len(genreIDs))
+	for _, gid := range genreIDs {
 		g, err := s.genres.GetByID(ctx, gid)
 		if err != nil {
 			return nil, err
@@ -123,7 +123,7 @@ func (s *MovieService) Create(ctx context.Context, req models.CreateMovieRequest
 	return movie, nil
 }
 
-func (s *MovieService) Update(ctx context.Context, id uuid.UUID, req models.UpdateMovieRequest) (*models.Movie, error) {
+func (s *MovieService) Update(ctx context.Context, id int, req models.UpdateMovieRequest) (*models.Movie, error) {
 	movie, err := s.movies.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -157,15 +157,15 @@ func (s *MovieService) Update(ctx context.Context, id uuid.UUID, req models.Upda
 		if len(req.GenreIDs) == 0 {
 			return nil, ErrNoGenresProvided
 		}
-		genreUUIDs, err := s.validateGenreIDs(ctx, req.GenreIDs)
+		genreIDs, err := s.validateGenreIDs(ctx, req.GenreIDs)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.movies.SetGenres(ctx, movie.ID, genreUUIDs); err != nil {
+		if err := s.movies.SetGenres(ctx, movie.ID, genreIDs); err != nil {
 			return nil, err
 		}
-		movie.Genres = make([]models.Genre, 0, len(genreUUIDs))
-		for _, gid := range genreUUIDs {
+		movie.Genres = make([]models.Genre, 0, len(genreIDs))
+		for _, gid := range genreIDs {
 			g, err := s.genres.GetByID(ctx, gid)
 			if err != nil {
 				return nil, err
@@ -183,7 +183,7 @@ func (s *MovieService) Update(ctx context.Context, id uuid.UUID, req models.Upda
 	return movie, nil
 }
 
-func (s *MovieService) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *MovieService) Delete(ctx context.Context, id int) error {
 	if _, err := s.movies.GetByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrMovieNotFound
@@ -193,20 +193,20 @@ func (s *MovieService) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.movies.Delete(ctx, id)
 }
 
-func (s *MovieService) validateGenreIDs(ctx context.Context, ids []string) ([]uuid.UUID, error) {
-	uuids := make([]uuid.UUID, 0, len(ids))
+func (s *MovieService) validateGenreIDs(ctx context.Context, ids []string) ([]int, error) {
+	genreIDs := make([]int, 0, len(ids))
 	for _, idStr := range ids {
-		gid, err := uuid.Parse(idStr)
+		genreID, err := strconv.Atoi(idStr)
 		if err != nil {
 			return nil, ErrGenreNotFound
 		}
-		if _, err := s.genres.GetByID(ctx, gid); err != nil {
+		if _, err := s.genres.GetByID(ctx, genreID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, ErrGenreNotFound
 			}
 			return nil, err
 		}
-		uuids = append(uuids, gid)
+		genreIDs = append(genreIDs, genreID)
 	}
-	return uuids, nil
+	return genreIDs, nil
 }

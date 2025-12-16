@@ -5,8 +5,6 @@ import (
 	"database/sql"
 
 	"golang-project/internal/models"
-
-	"github.com/google/uuid"
 )
 
 type ReviewRepository struct {
@@ -17,7 +15,7 @@ func NewReviewRepository(db *sql.DB) *ReviewRepository {
 	return &ReviewRepository{db: db}
 }
 
-func (r *ReviewRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Review, error) {
+func (r *ReviewRepository) GetByID(ctx context.Context, id int) (*models.Review, error) {
 	var review models.Review
 	err := r.db.QueryRowContext(
 		ctx,
@@ -34,7 +32,7 @@ func (r *ReviewRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.R
 	return &review, nil
 }
 
-func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID, limit, offset int) ([]models.Review, error) {
+func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID int, limit, offset int) ([]models.Review, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
 		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
@@ -63,7 +61,7 @@ func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID uuid.UUID, 
 	return reviews, rows.Err()
 }
 
-func (r *ReviewRepository) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Review, error) {
+func (r *ReviewRepository) GetByUserID(ctx context.Context, userID int, limit, offset int) ([]models.Review, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
 		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
@@ -92,7 +90,7 @@ func (r *ReviewRepository) GetByUserID(ctx context.Context, userID uuid.UUID, li
 	return reviews, rows.Err()
 }
 
-func (r *ReviewRepository) GetByMovieAndUser(ctx context.Context, movieID, userID uuid.UUID) (*models.Review, error) {
+func (r *ReviewRepository) GetByMovieAndUser(ctx context.Context, movieID, userID int) (*models.Review, error) {
 	var review models.Review
 	err := r.db.QueryRowContext(
 		ctx,
@@ -130,12 +128,12 @@ func (r *ReviewRepository) Update(ctx context.Context, review *models.Review) er
 	return err
 }
 
-func (r *ReviewRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *ReviewRepository) Delete(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM reviews WHERE id = $1", id)
 	return err
 }
 
-func (r *ReviewRepository) CountByMovieID(ctx context.Context, movieID uuid.UUID) (int, error) {
+func (r *ReviewRepository) CountByMovieID(ctx context.Context, movieID int) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(
 		ctx,
@@ -145,7 +143,7 @@ func (r *ReviewRepository) CountByMovieID(ctx context.Context, movieID uuid.UUID
 	return count, err
 }
 
-func (r *ReviewRepository) CountByUserID(ctx context.Context, userID uuid.UUID) (int, error) {
+func (r *ReviewRepository) CountByUserID(ctx context.Context, userID int) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(
 		ctx,
