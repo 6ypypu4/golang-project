@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -45,13 +46,18 @@ func RunMigrations(path string) error {
 		return fmt.Errorf("database is not initialized")
 	}
 
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve migrations path: %w", err)
+	}
+
 	driver, err := postgres.WithInstance(DB, &postgres.Config{})
 	if err != nil {
 		return fmt.Errorf("create migrate driver: %w", err)
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
-		fmt.Sprintf("file://%s", path),
+		"file://"+filepath.ToSlash(absPath),
 		"postgres",
 		driver,
 	)
