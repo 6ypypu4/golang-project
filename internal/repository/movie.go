@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -101,15 +102,19 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 	argsWithPage := append([]interface{}{}, args...)
 	argsWithPage = append(argsWithPage, limit, offset)
 
-	query := fmt.Sprintf(
-		`SELECT DISTINCT m.id, m.title, m.description, m.release_year, m.director, m.duration_minutes,
-		        m.average_rating, m.created_at, m.updated_at
-		 FROM movies m
-		 WHERE %s
-		 ORDER BY m.created_at DESC
-		 LIMIT $%d OFFSET $%d`,
-		whereSQL, len(args)+1, len(args)+2,
-	)
+	query := fmt.Sprintf(`
+		SELECT m.id, m.title, m.description, m.release_year, m.director, m.duration_minutes,
+		       m.average_rating, m.created_at, m.updated_at,
+		       COALESCE(json_agg(json_build_object('id', g.id, 'name', g.name, 'created_at', g.created_at)) FILTER (WHERE g.id IS NOT NULL), '[]') AS genres
+		FROM movies m
+		LEFT JOIN movie_genres mg ON mg.movie_id = m.id
+		LEFT JOIN genres g ON g.id = mg.genre_id
+		WHERE %s
+		GROUP BY m.id
+		ORDER BY m.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, len(args)+1, len(args)+2)
+
 	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
 	if err != nil {
 		return nil, 0, err
@@ -119,11 +124,15 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 	var movies []models.Movie
 	for rows.Next() {
 		var movie models.Movie
+		var genresJSON []byte
 		if err := rows.Scan(
 			&movie.ID, &movie.Title, &movie.Description, &movie.ReleaseYear,
 			&movie.Director, &movie.DurationMinutes, &movie.AverageRating,
-			&movie.CreatedAt, &movie.UpdatedAt,
+			&movie.CreatedAt, &movie.UpdatedAt, &genresJSON,
 		); err != nil {
+			return nil, 0, err
+		}
+		if err := json.Unmarshal(genresJSON, &movie.Genres); err != nil {
 			return nil, 0, err
 		}
 		movies = append(movies, movie)
@@ -132,40 +141,7 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 		return nil, 0, err
 	}
 
-	for i := range movies {
-		genres, err := r.GetGenresByMovieID(ctx, movies[i].ID)
-		if err != nil {
-			return nil, 0, err
-		}
-		movies[i].Genres = genres
-	}
-
 	return movies, total, nil
-}
-
-func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
-	rows, err := r.db.QueryContext(
-		ctx,
-		`SELECT g.id, g.name, g.created_at
-		 FROM genres g
-		 INNER JOIN movie_genres mg ON g.id = mg.genre_id
-		 WHERE mg.movie_id = $1`,
-		movieID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var genres []models.Genre
-	for rows.Next() {
-		var genre models.Genre
-		if err := rows.Scan(&genre.ID, &genre.Name, &genre.CreatedAt); err != nil {
-			return nil, err
-		}
-		genres = append(genres, genre)
-	}
-	return genres, rows.Err()
 }
 
 func (r *MovieRepository) SetGenres(ctx context.Context, movieID int, genreIDs []int) error {

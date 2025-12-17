@@ -87,7 +87,7 @@ func (s *ReviewService) Create(ctx context.Context, movieID, userID int, req mod
 
 	if _, err := s.reviews.GetByMovieAndUser(ctx, movieID, userID); err == nil {
 		return nil, ErrReviewExists
-	} else if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
