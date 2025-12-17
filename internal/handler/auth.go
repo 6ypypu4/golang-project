@@ -36,9 +36,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": ve.Error()})
 			return
 		}
-		// вместо generic internal error — выводим реальную ошибку
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
