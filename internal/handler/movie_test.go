@@ -12,36 +12,35 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/internal/service"
 )
 
 type mhMovieRepo struct {
-	movies      map[uuid.UUID]*models.Movie
-	movieGenres map[uuid.UUID][]uuid.UUID
+	movies      map[int]*models.Movie
+	movieGenres map[int][]int
 }
 
 type mhGenreLookup struct {
-	data map[uuid.UUID]*models.Genre
+	data map[int]*models.Genre
 }
 
-func (r *mhGenreLookup) GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (r *mhGenreLookup) GetByID(ctx context.Context, id int) (*models.Genre, error) {
 	if g, ok := r.data[id]; ok {
 		return g, nil
 	}
 	return nil, sql.ErrNoRows
 }
 
-func newMHRepos() (*mhMovieRepo, *mhGenreLookup, uuid.UUID) {
-	genreID := uuid.New()
-	genreRepo := &mhGenreLookup{data: map[uuid.UUID]*models.Genre{
+func newMHRepos() (*mhMovieRepo, *mhGenreLookup, int) {
+	genreID := 1
+	genreRepo := &mhGenreLookup{data: map[int]*models.Genre{
 		genreID: {ID: genreID, Name: "Drama"},
 	}}
 	movieRepo := &mhMovieRepo{
-		movies:      make(map[uuid.UUID]*models.Movie),
-		movieGenres: make(map[uuid.UUID][]uuid.UUID),
+		movies:      make(map[int]*models.Movie),
+		movieGenres: make(map[int][]int),
 	}
 	return movieRepo, genreRepo, genreID
 }
@@ -54,7 +53,7 @@ func (r *mhMovieRepo) List(ctx context.Context, filters models.MovieFilters, lim
 	return result, len(result), nil
 }
 
-func (r *mhMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
+func (r *mhMovieRepo) GetByID(ctx context.Context, id int) (*models.Movie, error) {
 	if m, ok := r.movies[id]; ok {
 		return m, nil
 	}
@@ -63,7 +62,7 @@ func (r *mhMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie,
 
 func (r *mhMovieRepo) Create(ctx context.Context, movie *models.Movie) error {
 	now := time.Now()
-	movie.ID = uuid.New()
+	movie.ID = len(r.movies) + 1
 	movie.CreatedAt = now
 	movie.UpdatedAt = now
 	r.movies[movie.ID] = movie
@@ -79,7 +78,7 @@ func (r *mhMovieRepo) Update(ctx context.Context, movie *models.Movie) error {
 	return nil
 }
 
-func (r *mhMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *mhMovieRepo) Delete(ctx context.Context, id int) error {
 	if _, ok := r.movies[id]; !ok {
 		return sql.ErrNoRows
 	}
@@ -88,7 +87,7 @@ func (r *mhMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *mhMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error {
+func (r *mhMovieRepo) SetGenres(ctx context.Context, movieID int, genreIDs []int) error {
 	if _, ok := r.movies[movieID]; !ok {
 		return sql.ErrNoRows
 	}
@@ -96,11 +95,11 @@ func (r *mhMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs
 	return nil
 }
 
-func (r *mhMovieRepo) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error) {
+func (r *mhMovieRepo) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
 	ids := r.movieGenres[movieID]
 	result := make([]models.Genre, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, models.Genre{ID: id, Name: id.String()})
+		result = append(result, models.Genre{ID: id, Name: ""})
 	}
 	return result, nil
 }
@@ -108,7 +107,7 @@ func (r *mhMovieRepo) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID)
 func TestMovieHandler_CRUD(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	mRepo, gRepo, genreID := newMHRepos()
+	mRepo, gRepo, _ := newMHRepos()
 	svc := service.NewMovieService(mRepo, gRepo, validator.New())
 	h := NewMovieHandler(svc)
 
@@ -124,7 +123,7 @@ func TestMovieHandler_CRUD(t *testing.T) {
 		Title:           "Movie",
 		ReleaseYear:     2020,
 		DurationMinutes: 100,
-		GenreIDs:        []string{genreID.String()},
+		GenreIDs:        []string{"1"},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/movies", bytes.NewBuffer(createBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -143,7 +142,7 @@ func TestMovieHandler_CRUD(t *testing.T) {
 	}
 
 	// Get not found
-	req = httptest.NewRequest(http.MethodGet, "/movies/"+uuid.New().String(), nil)
+	req = httptest.NewRequest(http.MethodGet, "/movies/9999", nil)
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	if w.Code != http.StatusNotFound {

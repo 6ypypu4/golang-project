@@ -8,21 +8,20 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 )
 
 type memoryMovieRepo struct {
-	movies      map[uuid.UUID]*models.Movie
-	movieGenres map[uuid.UUID][]uuid.UUID
+	movies      map[int]*models.Movie
+	movieGenres map[int][]int
 }
 
 type movieTestGenreRepo struct {
-	data map[uuid.UUID]*models.Genre
+	data map[int]*models.Genre
 }
 
-func (g *movieTestGenreRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (g *movieTestGenreRepo) GetByID(ctx context.Context, id int) (*models.Genre, error) {
 	if genre, ok := g.data[id]; ok {
 		return genre, nil
 	}
@@ -31,8 +30,8 @@ func (g *movieTestGenreRepo) GetByID(ctx context.Context, id uuid.UUID) (*models
 
 func newMemoryMovieRepo() *memoryMovieRepo {
 	return &memoryMovieRepo{
-		movies:      make(map[uuid.UUID]*models.Movie),
-		movieGenres: make(map[uuid.UUID][]uuid.UUID),
+		movies:      make(map[int]*models.Movie),
+		movieGenres: make(map[int][]int),
 	}
 }
 
@@ -44,7 +43,7 @@ func (r *memoryMovieRepo) List(ctx context.Context, filters models.MovieFilters,
 	return result, len(result), nil
 }
 
-func (r *memoryMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
+func (r *memoryMovieRepo) GetByID(ctx context.Context, id int) (*models.Movie, error) {
 	if m, ok := r.movies[id]; ok {
 		return m, nil
 	}
@@ -53,7 +52,7 @@ func (r *memoryMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Mo
 
 func (r *memoryMovieRepo) Create(ctx context.Context, movie *models.Movie) error {
 	now := time.Now()
-	movie.ID = uuid.New()
+	movie.ID = len(r.movies) + 1
 	movie.CreatedAt = now
 	movie.UpdatedAt = now
 	r.movies[movie.ID] = movie
@@ -69,7 +68,7 @@ func (r *memoryMovieRepo) Update(ctx context.Context, movie *models.Movie) error
 	return nil
 }
 
-func (r *memoryMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *memoryMovieRepo) Delete(ctx context.Context, id int) error {
 	if _, ok := r.movies[id]; !ok {
 		return sql.ErrNoRows
 	}
@@ -78,7 +77,7 @@ func (r *memoryMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *memoryMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error {
+func (r *memoryMovieRepo) SetGenres(ctx context.Context, movieID int, genreIDs []int) error {
 	if _, ok := r.movies[movieID]; !ok {
 		return sql.ErrNoRows
 	}
@@ -86,19 +85,19 @@ func (r *memoryMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genr
 	return nil
 }
 
-func (r *memoryMovieRepo) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error) {
+func (r *memoryMovieRepo) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
 	ids := r.movieGenres[movieID]
 	result := make([]models.Genre, 0, len(ids))
 	for _, id := range ids {
-		result = append(result, models.Genre{ID: id, Name: id.String()})
+		result = append(result, models.Genre{ID: id, Name: ""})
 	}
 	return result, nil
 }
 
 func TestMovieService_Create(t *testing.T) {
 	movieRepo := newMemoryMovieRepo()
-	genreID := uuid.New()
-	genreLookup := &movieTestGenreRepo{data: map[uuid.UUID]*models.Genre{
+	genreID := 1
+	genreLookup := &movieTestGenreRepo{data: map[int]*models.Genre{
 		genreID: {ID: genreID, Name: "Drama"},
 	}}
 	svc := NewMovieService(movieRepo, genreLookup, validator.New())
@@ -110,13 +109,13 @@ func TestMovieService_Create(t *testing.T) {
 			ReleaseYear:     2010,
 			Director:        "Nolan",
 			DurationMinutes: 120,
-			GenreIDs:        []string{genreID.String()},
+			GenreIDs:        []string{"1"},
 		}
 		movie, err := svc.Create(context.Background(), req)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if movie.ID == uuid.Nil {
+		if movie.ID == 0 {
 			t.Fatalf("expected ID set")
 		}
 		if len(movie.Genres) != 1 || movie.Genres[0].ID != genreID {
@@ -140,7 +139,7 @@ func TestMovieService_Create(t *testing.T) {
 			Title:           "Bad genre",
 			ReleaseYear:     2010,
 			DurationMinutes: 100,
-			GenreIDs:        []string{uuid.New().String()},
+			GenreIDs:        []string{"9999"},
 		}
 		if _, err := svc.Create(context.Background(), req); !errors.Is(err, ErrGenreNotFound) {
 			t.Fatalf("expected ErrGenreNotFound, got %v", err)
@@ -150,15 +149,15 @@ func TestMovieService_Create(t *testing.T) {
 
 func TestMovieService_Update_Delete(t *testing.T) {
 	movieRepo := newMemoryMovieRepo()
-	genreID := uuid.New()
-	genreLookup := &movieTestGenreRepo{data: map[uuid.UUID]*models.Genre{
+	genreID := 1
+	genreLookup := &movieTestGenreRepo{data: map[int]*models.Genre{
 		genreID: {ID: genreID, Name: "Drama"},
 	}}
 	svc := NewMovieService(movieRepo, genreLookup, validator.New())
 
 	// seed movie
 	m := &models.Movie{
-		ID:              uuid.New(),
+		ID:              1,
 		Title:           "Old",
 		ReleaseYear:     2000,
 		DurationMinutes: 90,
@@ -167,13 +166,13 @@ func TestMovieService_Update_Delete(t *testing.T) {
 		UpdatedAt:       time.Now(),
 	}
 	movieRepo.movies[m.ID] = m
-	movieRepo.movieGenres[m.ID] = []uuid.UUID{genreID}
+	movieRepo.movieGenres[m.ID] = []int{genreID}
 
 	t.Run("update ok", func(t *testing.T) {
 		req := models.UpdateMovieRequest{
 			Title:       "New title",
 			Description: "Desc",
-			GenreIDs:    []string{genreID.String()},
+			GenreIDs:    []string{"1"},
 		}
 		updated, err := svc.Update(context.Background(), m.ID, req)
 		if err != nil {
@@ -186,7 +185,7 @@ func TestMovieService_Update_Delete(t *testing.T) {
 
 	t.Run("update not found", func(t *testing.T) {
 		req := models.UpdateMovieRequest{Title: "X"}
-		if _, err := svc.Update(context.Background(), uuid.New(), req); !errors.Is(err, ErrMovieNotFound) {
+		if _, err := svc.Update(context.Background(), 9999, req); !errors.Is(err, ErrMovieNotFound) {
 			t.Fatalf("expected ErrMovieNotFound, got %v", err)
 		}
 	})
@@ -198,7 +197,7 @@ func TestMovieService_Update_Delete(t *testing.T) {
 	})
 
 	t.Run("delete not found", func(t *testing.T) {
-		if err := svc.Delete(context.Background(), uuid.New()); !errors.Is(err, ErrMovieNotFound) {
+		if err := svc.Delete(context.Background(), 9999); !errors.Is(err, ErrMovieNotFound) {
 			t.Fatalf("expected ErrMovieNotFound, got %v", err)
 		}
 	})

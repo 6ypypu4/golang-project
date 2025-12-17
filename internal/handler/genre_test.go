@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/internal/service"
@@ -20,11 +19,11 @@ import (
 
 // in-memory repo for handler tests
 type ghRepo struct {
-	data map[uuid.UUID]*models.Genre
+	data map[int]*models.Genre
 }
 
 func newGHRepo() *ghRepo {
-	return &ghRepo{data: make(map[uuid.UUID]*models.Genre)}
+	return &ghRepo{data: make(map[int]*models.Genre)}
 }
 
 func (r *ghRepo) GetAll(ctx context.Context) ([]models.Genre, error) {
@@ -35,7 +34,7 @@ func (r *ghRepo) GetAll(ctx context.Context) ([]models.Genre, error) {
 	return result, nil
 }
 
-func (r *ghRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (r *ghRepo) GetByID(ctx context.Context, id int) (*models.Genre, error) {
 	if g, ok := r.data[id]; ok {
 		return g, nil
 	}
@@ -52,7 +51,7 @@ func (r *ghRepo) GetByName(ctx context.Context, name string) (*models.Genre, err
 }
 
 func (r *ghRepo) Create(ctx context.Context, genre *models.Genre) error {
-	genre.ID = uuid.New()
+	genre.ID = len(r.data) + 1
 	genre.CreatedAt = time.Now()
 	r.data[genre.ID] = genre
 	return nil
@@ -66,7 +65,7 @@ func (r *ghRepo) Update(ctx context.Context, genre *models.Genre) error {
 	return nil
 }
 
-func (r *ghRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *ghRepo) Delete(ctx context.Context, id int) error {
 	if _, ok := r.data[id]; !ok {
 		return sql.ErrNoRows
 	}
@@ -82,7 +81,7 @@ func TestGenreHandler_CRUD(t *testing.T) {
 	h := NewGenreHandler(svc)
 
 	// seed
-	existing := &models.Genre{ID: uuid.New(), Name: "Drama", CreatedAt: time.Now()}
+	existing := &models.Genre{ID: 1, Name: "Drama", CreatedAt: time.Now()}
 	repo.data[existing.ID] = existing
 
 	router := gin.New()
@@ -104,7 +103,7 @@ func TestGenreHandler_CRUD(t *testing.T) {
 
 	// Get not found
 	{
-		req := httptest.NewRequest(http.MethodGet, "/genres/"+uuid.New().String(), nil)
+		req := httptest.NewRequest(http.MethodGet, "/genres/9999", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		if w.Code != http.StatusNotFound {
@@ -139,7 +138,7 @@ func TestGenreHandler_CRUD(t *testing.T) {
 	// Update ok
 	{
 		body, _ := json.Marshal(models.CreateGenreRequest{Name: "Updated"})
-		req := httptest.NewRequest(http.MethodPut, "/genres/"+existing.ID.String(), bytes.NewBuffer(body))
+		req := httptest.NewRequest(http.MethodPut, "/genres/1", bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -150,7 +149,7 @@ func TestGenreHandler_CRUD(t *testing.T) {
 
 	// Delete ok
 	{
-		req := httptest.NewRequest(http.MethodDelete, "/genres/"+existing.ID.String(), nil)
+		req := httptest.NewRequest(http.MethodDelete, "/genres/1", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 		if w.Code != http.StatusNoContent {

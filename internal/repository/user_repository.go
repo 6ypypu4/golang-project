@@ -6,16 +6,14 @@ import (
 	"errors"
 
 	"golang-project/internal/models"
-
-	"github.com/google/uuid"
 )
 
 type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
-	GetByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GetByID(ctx context.Context, id int) (*models.User, error)
 	List(ctx context.Context, limit, offset int) ([]models.User, int, error)
-	UpdateRole(ctx context.Context, id uuid.UUID, role string) error
+	UpdateRole(ctx context.Context, id int, role string) error
 }
 
 type PostgresUserRepository struct {
@@ -59,7 +57,7 @@ func (r *PostgresUserRepository) GetByEmail(ctx context.Context, email string) (
 	return &u, nil
 }
 
-func (r *PostgresUserRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.User, error) {
 	query := `
 		SELECT id, email, username, password_hash, role, created_at, updated_at
 		FROM users
@@ -104,7 +102,7 @@ func (r *PostgresUserRepository) List(ctx context.Context, limit, offset int) ([
 	return users, total, rows.Err()
 }
 
-func (r *PostgresUserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+func (r *PostgresUserRepository) UpdateRole(ctx context.Context, id int, role string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE users SET role = $1, updated_at = NOW()
 		WHERE id = $2

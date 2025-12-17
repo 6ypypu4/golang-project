@@ -14,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/internal/service"
@@ -38,7 +37,7 @@ func (r *memoryUserRepo) Create(ctx context.Context, user *models.User) error {
 		return errors.New("duplicate")
 	}
 	now := time.Now()
-	user.ID = uuid.New()
+	user.ID = len(r.users) + 1
 	user.CreatedAt = now
 	user.UpdatedAt = now
 	r.users[user.Email] = user
@@ -55,7 +54,7 @@ func (r *memoryUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 	return nil, sql.ErrNoRows
 }
 
-func (r *memoryUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+func (r *memoryUserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, u := range r.users {
@@ -84,7 +83,7 @@ func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.
 	return result[offset:end], total, nil
 }
 
-func (r *memoryUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+func (r *memoryUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, u := range r.users {
@@ -139,7 +138,7 @@ func TestAuthHandler_Register(t *testing.T) {
 			if tt.prepopulate {
 				hash, _ := jwt.HashPassword("password123")
 				repo.users["dupe@example.com"] = &models.User{
-					ID:           uuid.New(),
+					ID:           1,
 					Email:        "dupe@example.com",
 					Username:     "dupe",
 					PasswordHash: hash,
@@ -224,7 +223,7 @@ func TestAuthHandler_Login(t *testing.T) {
 			if tt.setupUser {
 				hash, _ := jwt.HashPassword(tt.password)
 				repo.users["user@example.com"] = &models.User{
-					ID:           uuid.New(),
+					ID:           1,
 					Email:        "user@example.com",
 					Username:     "user",
 					PasswordHash: hash,
