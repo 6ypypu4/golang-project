@@ -1,22 +1,28 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"github.com/gin-gonic/gin"
-	"math/rand"
 	"strconv"
-	"time"
 )
 
 const requestIDHeader = "X-Request-ID"
 
 func RequestID() gin.HandlerFunc {
-	rand.Seed(time.Now().UnixNano())
 	return func(c *gin.Context) {
 		id := c.GetHeader(requestIDHeader)
 		if id == "" {
-			id = strconv.Itoa(rand.Intn(1_000_000_000)) // случайный int в виде строки
+			var b [8]byte
+			if _, err := rand.Read(b[:]); err != nil {
+				c.Writer.Header().Set(requestIDHeader, "0")
+			} else {
+				randomInt := int(binary.LittleEndian.Uint64(b[:]) & 0x7FFFFFFF)
+				c.Writer.Header().Set(requestIDHeader, strconv.Itoa(randomInt))
+			}
+		} else {
+			c.Writer.Header().Set(requestIDHeader, id)
 		}
-		c.Writer.Header().Set(requestIDHeader, id)
 		c.Next()
 	}
 }
