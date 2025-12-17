@@ -28,8 +28,9 @@ func (h *ReviewHandler) ListByMovie(c *gin.Context) {
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	filters := parseReviewFilters(c)
 
-	reviews, err := h.service.ListByMovie(c.Request.Context(), movieID, page, limit)
+	reviews, err := h.service.ListByMovie(c.Request.Context(), movieID, filters, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list reviews"})
 		return

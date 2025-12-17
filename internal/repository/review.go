@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"golang-project/internal/models"
 )
@@ -35,12 +36,15 @@ func (r *ReviewRepository) GetByID(ctx context.Context, id int) (*models.Review,
 func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID int, limit, offset int) ([]models.Review, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE movie_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		movieID, limit, offset,
+		fmt.Sprintf(
+			`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+			 FROM reviews
+			 WHERE %s
+			 ORDER BY created_at DESC
+			 LIMIT $%d OFFSET $%d`,
+			where, argPos, argPos+1,
+		),
+		args...,
 	)
 	if err != nil {
 		return nil, err
@@ -64,12 +68,15 @@ func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID int, limit,
 func (r *ReviewRepository) GetByUserID(ctx context.Context, userID int, limit, offset int) ([]models.Review, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		userID, limit, offset,
+		fmt.Sprintf(
+			`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+			 FROM reviews
+			 WHERE %s
+			 ORDER BY created_at DESC
+			 LIMIT $%d OFFSET $%d`,
+			where, argPos, argPos+1,
+		),
+		args...,
 	)
 	if err != nil {
 		return nil, err

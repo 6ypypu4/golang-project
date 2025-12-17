@@ -51,7 +51,22 @@ func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, page, limi
 		limit = 10
 	}
 	offset := (page - 1) * limit
-	return s.reviews.GetByMovieID(ctx, movieID, limit, offset)
+	return s.reviews.GetByMovieID(ctx, movieID, filters, limit, offset)
+}
+
+func (s *ReviewService) ListByUser(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	offset := (page - 1) * limit
+	return s.reviews.GetByUserID(ctx, userID, filters, limit, offset)
+}
+
+func (s *ReviewService) CountByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	return s.reviews.CountByUserID(ctx, userID)
 }
 
 func (s *ReviewService) Create(ctx context.Context, movieID, userID int, req models.CreateReviewRequest) (*models.Review, error) {

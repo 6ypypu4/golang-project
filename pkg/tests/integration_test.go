@@ -59,6 +59,43 @@ func (r *memUserRepo) GetByEmail(ctx context.Context, email string) (*models.Use
 	return nil, sql.ErrNoRows
 }
 
+func (r *memUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.byID[id]; ok {
+		return u, nil
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make([]models.User, 0, len(r.byID))
+	for _, u := range r.byID {
+		result = append(result, *u)
+	}
+	total := len(result)
+	if offset >= total {
+		return []models.User{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return result[offset:end], total, nil
+}
+
+func (r *memUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.byID[id]; ok {
+		u.Role = role
+		return nil
+	}
+	return sql.ErrNoRows
+}
+
 type memGenreRepo struct {
 	mu   sync.Mutex
 	data map[uuid.UUID]*models.Genre
@@ -261,10 +298,51 @@ func (r *memReviewRepo) GetByMovieAndUser(ctx context.Context, movieID, userID u
 	return nil, sql.ErrNoRows
 }
 
-func (r *memReviewRepo) GetByMovieID(ctx context.Context, movieID uuid.UUID, limit, offset int) ([]models.Review, error) {
+func (r *memReviewRepo) GetByMovieID(ctx context.Context, movieID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	all := r.byMovie[movieID]
+	filtered := make([]*models.Review, 0, len(all))
+	for _, rv := range all {
+		if filters.MinRating > 0 && rv.Rating < filters.MinRating {
+			continue
+		}
+		if filters.MaxRating > 0 && rv.Rating > filters.MaxRating {
+			continue
+		}
+		filtered = append(filtered, rv)
+	}
+	all = filtered
+	total := len(all)
+	if offset >= total {
+		return []models.Review{}, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	res := make([]models.Review, 0, end-offset)
+	for _, rv := range all[offset:end] {
+		res = append(res, *rv)
+	}
+	return res, nil
+}
+
+func (r *memReviewRepo) GetByUserID(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	all := make([]*models.Review, 0, len(r.data))
+	for _, rv := range r.data {
+		if rv.UserID == userID {
+			if filters.MinRating > 0 && rv.Rating < filters.MinRating {
+				continue
+			}
+			if filters.MaxRating > 0 && rv.Rating > filters.MaxRating {
+				continue
+			}
+			all = append(all, rv)
+		}
+	}
 	total := len(all)
 	if offset >= total {
 		return []models.Review{}, nil
@@ -327,6 +405,18 @@ func (r *memReviewRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 	r.byMovie[review.MovieID] = arr
 	return nil
+}
+
+func (r *memReviewRepo) CountByUserID(ctx context.Context, userID uuid.UUID) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for _, rv := range r.data {
+		if rv.UserID == userID {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func buildTestRouter(t *testing.T) *gin.Engine {
