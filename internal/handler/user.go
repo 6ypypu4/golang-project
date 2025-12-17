@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"golang-project/internal/middleware"
 	"golang-project/internal/models"
@@ -23,7 +22,7 @@ func NewUserHandler(users *service.UserService, reviews *service.ReviewService) 
 
 func (h *UserHandler) Me(c *gin.Context) {
 	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	uid, err := uuid.Parse(userIDStr.(string))
+	uid, err := strconv.Atoi(userIDStr.(string))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
@@ -49,7 +48,7 @@ func (h *UserHandler) Me(c *gin.Context) {
 
 func (h *UserHandler) MyReviews(c *gin.Context) {
 	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	uid, err := uuid.Parse(userIDStr.(string))
+	uid, err := strconv.Atoi(userIDStr.(string))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
@@ -58,7 +57,7 @@ func (h *UserHandler) MyReviews(c *gin.Context) {
 }
 
 func (h *UserHandler) UserReviews(c *gin.Context) {
-	uid, err := uuid.Parse(c.Param("id"))
+	uid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
@@ -66,7 +65,7 @@ func (h *UserHandler) UserReviews(c *gin.Context) {
 	h.listReviewsByUser(c, uid)
 }
 
-func (h *UserHandler) listReviewsByUser(c *gin.Context, uid uuid.UUID) {
+func (h *UserHandler) listReviewsByUser(c *gin.Context, uid int) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	filters := parseReviewFilters(c)
@@ -110,7 +109,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 }
 
 func (h *UserHandler) GetUser(c *gin.Context) {
-	uid, err := uuid.Parse(c.Param("id"))
+	uid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
@@ -128,7 +127,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 }
 
 func (h *UserHandler) UpdateRole(c *gin.Context) {
-	uid, err := uuid.Parse(c.Param("id"))
+	uid, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return

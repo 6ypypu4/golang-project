@@ -18,10 +18,12 @@ var (
 type ReviewRepo interface {
 	GetByID(ctx context.Context, id int) (*models.Review, error)
 	GetByMovieAndUser(ctx context.Context, movieID, userID int) (*models.Review, error)
-	GetByMovieID(ctx context.Context, movieID int, limit, offset int) ([]models.Review, error)
+	GetByMovieID(ctx context.Context, movieID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error)
+	GetByUserID(ctx context.Context, userID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error)
 	Create(ctx context.Context, review *models.Review) error
 	Update(ctx context.Context, review *models.Review) error
 	Delete(ctx context.Context, id int) error
+	CountByUserID(ctx context.Context, userID int) (int, error)
 }
 
 type MovieLookup interface {
@@ -51,10 +53,11 @@ func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, page, limi
 		limit = 10
 	}
 	offset := (page - 1) * limit
+	filters := models.ReviewFilters{}
 	return s.reviews.GetByMovieID(ctx, movieID, filters, limit, offset)
 }
 
-func (s *ReviewService) ListByUser(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
+func (s *ReviewService) ListByUser(ctx context.Context, userID int, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -65,7 +68,7 @@ func (s *ReviewService) ListByUser(ctx context.Context, userID uuid.UUID, filter
 	return s.reviews.GetByUserID(ctx, userID, filters, limit, offset)
 }
 
-func (s *ReviewService) CountByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+func (s *ReviewService) CountByUser(ctx context.Context, userID int) (int, error) {
 	return s.reviews.CountByUserID(ctx, userID)
 }
 

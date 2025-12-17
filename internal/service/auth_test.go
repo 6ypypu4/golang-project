@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/models"
 	"golang-project/pkg/jwt"
@@ -27,7 +26,7 @@ func (r *memoryUserRepo) Create(ctx context.Context, user *models.User) error {
 		return errors.New("duplicate")
 	}
 	now := time.Now()
-	user.ID = uuid.New()
+	user.ID = len(r.users) + 1
 	user.CreatedAt = now
 	user.UpdatedAt = now
 	r.users[user.Email] = user
@@ -41,7 +40,7 @@ func (r *memoryUserRepo) GetByEmail(ctx context.Context, email string) (*models.
 	return nil, sql.ErrNoRows
 }
 
-func (r *memoryUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+func (r *memoryUserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 	for _, u := range r.users {
 		if u.ID == id {
 			return u, nil
@@ -66,7 +65,7 @@ func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.
 	return result[offset:end], total, nil
 }
 
-func (r *memoryUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+func (r *memoryUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	for _, u := range r.users {
 		if u.ID == id {
 			u.Role = role
@@ -91,7 +90,7 @@ func TestAuthService_Register(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if user == nil || user.ID == uuid.Nil {
+		if user == nil || user.ID == 0 {
 			t.Fatalf("expected user with ID, got %#v", user)
 		}
 		if token == "" {
@@ -104,7 +103,7 @@ func TestAuthService_Register(t *testing.T) {
 
 	t.Run("duplicate email", func(t *testing.T) {
 		existing := &models.User{
-			ID:           uuid.New(),
+			ID:           1,
 			Email:        "dupe@example.com",
 			Username:     "dupe",
 			PasswordHash: "hash",
@@ -145,7 +144,7 @@ func TestAuthService_Login(t *testing.T) {
 		t.Fatalf("hash password: %v", err)
 	}
 	user := &models.User{
-		ID:           uuid.New(),
+		ID:           1,
 		Email:        "user@example.com",
 		Username:     "user",
 		PasswordHash: hash,
@@ -163,7 +162,7 @@ func TestAuthService_Login(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		if u == nil || u.ID != user.ID {
-			t.Fatalf("expected user %s, got %#v", user.ID, u)
+			t.Fatalf("expected user %d, got %#v", user.ID, u)
 		}
 		if token == "" {
 			t.Fatalf("expected token, got empty")

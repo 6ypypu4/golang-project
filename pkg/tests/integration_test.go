@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 
 	"golang-project/internal/handler"
 	"golang-project/internal/middleware"
@@ -26,13 +26,13 @@ import (
 
 type memUserRepo struct {
 	mu      sync.Mutex
-	byID    map[uuid.UUID]*models.User
+	byID    map[int]*models.User
 	byEmail map[string]*models.User
 }
 
 func newMemUserRepo() *memUserRepo {
 	return &memUserRepo{
-		byID:    make(map[uuid.UUID]*models.User),
+		byID:    make(map[int]*models.User),
 		byEmail: make(map[string]*models.User),
 	}
 }
@@ -40,7 +40,7 @@ func newMemUserRepo() *memUserRepo {
 func (r *memUserRepo) Create(ctx context.Context, user *models.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id := uuid.New()
+	id := len(r.byID) + 1
 	now := time.Now()
 	user.ID = id
 	user.CreatedAt = now
@@ -59,7 +59,7 @@ func (r *memUserRepo) GetByEmail(ctx context.Context, email string) (*models.Use
 	return nil, sql.ErrNoRows
 }
 
-func (r *memUserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
+func (r *memUserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if u, ok := r.byID[id]; ok {
@@ -86,7 +86,7 @@ func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.Use
 	return result[offset:end], total, nil
 }
 
-func (r *memUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) error {
+func (r *memUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if u, ok := r.byID[id]; ok {
@@ -98,11 +98,11 @@ func (r *memUserRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string)
 
 type memGenreRepo struct {
 	mu   sync.Mutex
-	data map[uuid.UUID]*models.Genre
+	data map[int]*models.Genre
 }
 
 func newMemGenreRepo() *memGenreRepo {
-	return &memGenreRepo{data: make(map[uuid.UUID]*models.Genre)}
+	return &memGenreRepo{data: make(map[int]*models.Genre)}
 }
 
 func (r *memGenreRepo) GetAll(ctx context.Context) ([]models.Genre, error) {
@@ -115,7 +115,7 @@ func (r *memGenreRepo) GetAll(ctx context.Context) ([]models.Genre, error) {
 	return res, nil
 }
 
-func (r *memGenreRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Genre, error) {
+func (r *memGenreRepo) GetByID(ctx context.Context, id int) (*models.Genre, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if g, ok := r.data[id]; ok {
@@ -138,7 +138,7 @@ func (r *memGenreRepo) GetByName(ctx context.Context, name string) (*models.Genr
 func (r *memGenreRepo) Create(ctx context.Context, genre *models.Genre) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id := uuid.New()
+	id := len(r.data) + 1
 	now := time.Now()
 	genre.ID = id
 	genre.CreatedAt = now
@@ -156,7 +156,7 @@ func (r *memGenreRepo) Update(ctx context.Context, genre *models.Genre) error {
 	return nil
 }
 
-func (r *memGenreRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *memGenreRepo) Delete(ctx context.Context, id int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.data[id]; !ok {
@@ -168,14 +168,14 @@ func (r *memGenreRepo) Delete(ctx context.Context, id uuid.UUID) error {
 
 type memMovieRepo struct {
 	mu          sync.Mutex
-	movies      map[uuid.UUID]*models.Movie
-	movieGenres map[uuid.UUID][]uuid.UUID
+	movies      map[int]*models.Movie
+	movieGenres map[int][]int
 }
 
 func newMemMovieRepo() *memMovieRepo {
 	return &memMovieRepo{
-		movies:      make(map[uuid.UUID]*models.Movie),
-		movieGenres: make(map[uuid.UUID][]uuid.UUID),
+		movies:      make(map[int]*models.Movie),
+		movieGenres: make(map[int][]int),
 	}
 }
 
@@ -197,7 +197,7 @@ func (r *memMovieRepo) List(ctx context.Context, filters models.MovieFilters, li
 	return all[offset:end], total, nil
 }
 
-func (r *memMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie, error) {
+func (r *memMovieRepo) GetByID(ctx context.Context, id int) (*models.Movie, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if m, ok := r.movies[id]; ok {
@@ -209,7 +209,7 @@ func (r *memMovieRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Movie
 func (r *memMovieRepo) Create(ctx context.Context, movie *models.Movie) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id := uuid.New()
+	id := len(r.movies) + 1
 	now := time.Now()
 	movie.ID = id
 	movie.CreatedAt = now
@@ -229,7 +229,7 @@ func (r *memMovieRepo) Update(ctx context.Context, movie *models.Movie) error {
 	return nil
 }
 
-func (r *memMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *memMovieRepo) Delete(ctx context.Context, id int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.movies[id]; !ok {
@@ -240,7 +240,7 @@ func (r *memMovieRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *memMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genreIDs []uuid.UUID) error {
+func (r *memMovieRepo) SetGenres(ctx context.Context, movieID int, genreIDs []int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.movies[movieID]; !ok {
@@ -250,35 +250,35 @@ func (r *memMovieRepo) SetGenres(ctx context.Context, movieID uuid.UUID, genreID
 	return nil
 }
 
-func (r *memMovieRepo) GetGenresByMovieID(ctx context.Context, movieID uuid.UUID) ([]models.Genre, error) {
+func (r *memMovieRepo) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ids := r.movieGenres[movieID]
 	res := make([]models.Genre, 0, len(ids))
 	for _, id := range ids {
-		res = append(res, models.Genre{ID: id, Name: id.String(), CreatedAt: time.Now()})
+		res = append(res, models.Genre{ID: id, Name: "", CreatedAt: time.Now()})
 	}
 	return res, nil
 }
 
-func (r *memMovieRepo) UpdateAverageRating(ctx context.Context, movieID uuid.UUID) error {
+func (r *memMovieRepo) UpdateAverageRating(ctx context.Context, movieID int) error {
 	return nil
 }
 
 type memReviewRepo struct {
 	mu      sync.Mutex
-	data    map[uuid.UUID]*models.Review
-	byMovie map[uuid.UUID][]*models.Review
+	data    map[int]*models.Review
+	byMovie map[int][]*models.Review
 }
 
 func newMemReviewRepo() *memReviewRepo {
 	return &memReviewRepo{
-		data:    make(map[uuid.UUID]*models.Review),
-		byMovie: make(map[uuid.UUID][]*models.Review),
+		data:    make(map[int]*models.Review),
+		byMovie: make(map[int][]*models.Review),
 	}
 }
 
-func (r *memReviewRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Review, error) {
+func (r *memReviewRepo) GetByID(ctx context.Context, id int) (*models.Review, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if rv, ok := r.data[id]; ok {
@@ -287,7 +287,7 @@ func (r *memReviewRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Revi
 	return nil, sql.ErrNoRows
 }
 
-func (r *memReviewRepo) GetByMovieAndUser(ctx context.Context, movieID, userID uuid.UUID) (*models.Review, error) {
+func (r *memReviewRepo) GetByMovieAndUser(ctx context.Context, movieID, userID int) (*models.Review, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, rv := range r.byMovie[movieID] {
@@ -298,7 +298,7 @@ func (r *memReviewRepo) GetByMovieAndUser(ctx context.Context, movieID, userID u
 	return nil, sql.ErrNoRows
 }
 
-func (r *memReviewRepo) GetByMovieID(ctx context.Context, movieID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
+func (r *memReviewRepo) GetByMovieID(ctx context.Context, movieID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	all := r.byMovie[movieID]
@@ -328,7 +328,7 @@ func (r *memReviewRepo) GetByMovieID(ctx context.Context, movieID uuid.UUID, fil
 	return res, nil
 }
 
-func (r *memReviewRepo) GetByUserID(ctx context.Context, userID uuid.UUID, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
+func (r *memReviewRepo) GetByUserID(ctx context.Context, userID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	all := make([]*models.Review, 0, len(r.data))
@@ -361,7 +361,7 @@ func (r *memReviewRepo) GetByUserID(ctx context.Context, userID uuid.UUID, filte
 func (r *memReviewRepo) Create(ctx context.Context, review *models.Review) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id := uuid.New()
+	id := len(r.data) + 1
 	now := time.Now()
 	review.ID = id
 	review.CreatedAt = now
@@ -388,7 +388,7 @@ func (r *memReviewRepo) Update(ctx context.Context, review *models.Review) error
 	return nil
 }
 
-func (r *memReviewRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *memReviewRepo) Delete(ctx context.Context, id int) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	review, ok := r.data[id]
@@ -407,7 +407,7 @@ func (r *memReviewRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *memReviewRepo) CountByUserID(ctx context.Context, userID uuid.UUID) (int, error) {
+func (r *memReviewRepo) CountByUserID(ctx context.Context, userID int) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	count := 0
@@ -544,10 +544,10 @@ func createGenre(t *testing.T, r *gin.Engine, token, name string) string {
 		t.Fatalf("create genre expected 201, got %d body %s", w.Code, w.Body.String())
 	}
 	var resp models.Genre
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == uuid.Nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == 0 {
 		t.Fatalf("parse genre err=%v body=%s", err, w.Body.String())
 	}
-	return resp.ID.String()
+	return strconv.Itoa(resp.ID)
 }
 
 func createMovie(t *testing.T, r *gin.Engine, token, title, genreID string) string {
@@ -566,10 +566,10 @@ func createMovie(t *testing.T, r *gin.Engine, token, title, genreID string) stri
 		t.Fatalf("create movie expected 201, got %d body %s", w.Code, w.Body.String())
 	}
 	var resp models.Movie
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == uuid.Nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == 0 {
 		t.Fatalf("parse movie err=%v body=%s", err, w.Body.String())
 	}
-	return resp.ID.String()
+	return strconv.Itoa(resp.ID)
 }
 
 func createReview(t *testing.T, r *gin.Engine, token, movieID string, rating int, title, content string) string {
@@ -583,10 +583,10 @@ func createReview(t *testing.T, r *gin.Engine, token, movieID string, rating int
 		t.Fatalf("create review expected 201, got %d body %s", w.Code, w.Body.String())
 	}
 	var resp models.Review
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == uuid.Nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.ID == 0 {
 		t.Fatalf("parse review err=%v body=%s", err, w.Body.String())
 	}
-	return resp.ID.String()
+	return strconv.Itoa(resp.ID)
 }
 
 func updateReview(t *testing.T, r *gin.Engine, token, reviewID string, rating int, title, content string) {
