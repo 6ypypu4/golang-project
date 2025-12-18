@@ -179,6 +179,35 @@ func (r *MovieRepository) UpdateAverageRating(ctx context.Context, movieID int) 
 	return err
 }
 
+func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID int) ([]models.Genre, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT g.id, g.name, g.created_at
+		 FROM genres g
+		 INNER JOIN movie_genres mg ON g.id = mg.genre_id
+		 WHERE mg.movie_id = $1
+		 ORDER BY g.name`,
+		movieID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var genres []models.Genre
+	for rows.Next() {
+		var genre models.Genre
+		if err := rows.Scan(&genre.ID, &genre.Name, &genre.CreatedAt); err != nil {
+			return nil, err
+		}
+		genres = append(genres, genre)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return genres, nil
+}
+
 func (r *MovieRepository) Count(ctx context.Context) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM movies").Scan(&count)
