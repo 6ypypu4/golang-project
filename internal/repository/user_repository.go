@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"golang-project/internal/models"
 )
@@ -13,10 +15,13 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	GetByUsername(ctx context.Context, username string) (*models.User, error)
 	GetByID(ctx context.Context, id int) (*models.User, error)
-	List(ctx context.Context, limit, offset int) ([]models.User, int, error)
+	List(ctx context.Context, filters models.UserFilters, limit, offset int) ([]models.User, int, error)
 	UpdateRole(ctx context.Context, id int, role string) error
 	Update(ctx context.Context, id int, email, username string) error
+	UpdatePassword(ctx context.Context, id int, passwordHash string) error
 	Delete(ctx context.Context, id int) error
+	Count(ctx context.Context) (int, error)
+	CountLast7Days(ctx context.Context) (int, error)
 }
 
 type PostgresUserRepository struct {
@@ -95,19 +100,42 @@ func (r *PostgresUserRepository) GetByID(ctx context.Context, id int) (*models.U
 	return &u, nil
 }
 
-func (r *PostgresUserRepository) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
-	countQuery := "SELECT COUNT(*) FROM users"
+func (r *PostgresUserRepository) List(ctx context.Context, filters models.UserFilters, limit, offset int) ([]models.User, int, error) {
+	whereParts := []string{"1=1"}
+	args := []interface{}{}
+	argPos := 1
+
+	if filters.Search != "" {
+		args = append(args, "%"+filters.Search+"%")
+		whereParts = append(whereParts, fmt.Sprintf("(LOWER(email) LIKE LOWER($%d) OR LOWER(username) LIKE LOWER($%d))", argPos, argPos))
+		argPos++
+	}
+	if filters.Role != "" {
+		args = append(args, filters.Role)
+		whereParts = append(whereParts, fmt.Sprintf("role = $%d", argPos))
+		argPos++
+	}
+
+	whereSQL := strings.Join(whereParts, " AND ")
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM users WHERE %s", whereSQL)
 	var total int
-	if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	argsWithPage := append([]interface{}{}, args...)
+	argsWithPage = append(argsWithPage, limit, offset)
+
+	query := fmt.Sprintf(`
 		SELECT id, email, username, password_hash, role, created_at, updated_at
 		FROM users
+		WHERE %s
 		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2
-	`, limit, offset)
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, argPos, argPos+1)
+
+	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -154,6 +182,24 @@ func (r *PostgresUserRepository) Update(ctx context.Context, id int, email, user
 	return nil
 }
 
+func (r *PostgresUserRepository) UpdatePassword(ctx context.Context, id int, passwordHash string) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE users SET password_hash = $1, updated_at = NOW()
+		WHERE id = $2
+	`, passwordHash, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *PostgresUserRepository) Delete(ctx context.Context, id int) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
@@ -167,4 +213,16 @@ func (r *PostgresUserRepository) Delete(ctx context.Context, id int) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *PostgresUserRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+	return count, err
+}
+
+func (r *PostgresUserRepository) CountLast7Days(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '7 days'").Scan(&count)
+	return count, err
 }

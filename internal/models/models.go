@@ -72,6 +72,11 @@ type UpdateUserRequest struct {
 	Username string `json:"username" validate:"omitempty,min=3,max=100"`
 }
 
+type UpdatePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=6"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
@@ -122,11 +127,41 @@ type MovieFilters struct {
 	Year      int     `json:"year"`
 	MinRating float64 `json:"min_rating"`
 	Search    string  `json:"search"`
+	Sort      string  `json:"sort"`
 }
 
 type ReviewFilters struct {
-	MinRating int `json:"min_rating"`
-	MaxRating int `json:"max_rating"`
+	MinRating int    `json:"min_rating"`
+	MaxRating int    `json:"max_rating"`
+	Sort      string `json:"sort"`
+}
+
+type UserFilters struct {
+	Search string `json:"search"`
+	Role   string `json:"role"`
+}
+
+type AuditLogFilters struct {
+	Event    string     `json:"event"`
+	UserID   *int       `json:"user_id"`
+	FromDate *time.Time `json:"from_date"`
+	ToDate   *time.Time `json:"to_date"`
+}
+
+type UserStats struct {
+	AverageRating float64 `json:"average_rating"`
+	FavoriteGenre *Genre  `json:"favorite_genre,omitempty"`
+}
+
+type AdminStats struct {
+	TotalUsers       int     `json:"total_users"`
+	TotalMovies      int     `json:"total_movies"`
+	TotalReviews     int     `json:"total_reviews"`
+	TotalGenres      int     `json:"total_genres"`
+	AverageRating    float64 `json:"average_rating"`
+	UsersLast7Days   int     `json:"users_last_7_days"`
+	ReviewsLast7Days int     `json:"reviews_last_7_days"`
+	MoviesLast7Days  int     `json:"movies_last_7_days"`
 }
 
 type PaginatedResponse struct {

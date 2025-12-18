@@ -49,9 +49,17 @@ func (r *memoryUserRepo) GetByID(ctx context.Context, id int) (*models.User, err
 	return nil, sql.ErrNoRows
 }
 
-func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
+func (r *memoryUserRepo) List(ctx context.Context, filters models.UserFilters, limit, offset int) ([]models.User, int, error) {
 	result := make([]models.User, 0, len(r.users))
 	for _, u := range r.users {
+		if filters.Search != "" {
+			if !contains(u.Email, filters.Search) && !contains(u.Username, filters.Search) {
+				continue
+			}
+		}
+		if filters.Role != "" && u.Role != filters.Role {
+			continue
+		}
 		result = append(result, *u)
 	}
 	total := len(result)
@@ -63,6 +71,10 @@ func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.
 		end = total
 	}
 	return result[offset:end], total, nil
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0)
 }
 
 func (r *memoryUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
@@ -110,6 +122,32 @@ func (r *memoryUserRepo) Delete(ctx context.Context, id int) error {
 		}
 	}
 	return sql.ErrNoRows
+}
+
+func (r *memoryUserRepo) UpdatePassword(ctx context.Context, id int, passwordHash string) error {
+	for _, u := range r.users {
+		if u.ID == id {
+			u.PasswordHash = passwordHash
+			u.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return sql.ErrNoRows
+}
+
+func (r *memoryUserRepo) Count(ctx context.Context) (int, error) {
+	return len(r.users), nil
+}
+
+func (r *memoryUserRepo) CountLast7Days(ctx context.Context) (int, error) {
+	count := 0
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	for _, u := range r.users {
+		if u.CreatedAt.After(sevenDaysAgo) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func TestAuthService_Register(t *testing.T) {

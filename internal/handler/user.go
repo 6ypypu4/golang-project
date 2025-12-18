@@ -3,21 +3,36 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"golang-project/internal/middleware"
 	"golang-project/internal/models"
+	"golang-project/internal/repository"
 	"golang-project/internal/service"
 )
 
 type UserHandler struct {
-	users   *service.UserService
-	reviews *service.ReviewService
+	users      *service.UserService
+	reviews    *service.ReviewService
+	userRepo   repository.UserRepository
+	movieRepo  service.MovieCountRepo
+	reviewRepo service.ReviewCountRepo
+	genreRepo  service.GenreCountRepo
+	auditRepo  service.AuditLogRepo
 }
 
-func NewUserHandler(users *service.UserService, reviews *service.ReviewService) *UserHandler {
-	return &UserHandler{users: users, reviews: reviews}
+func NewUserHandler(users *service.UserService, reviews *service.ReviewService, userRepo repository.UserRepository, movieRepo service.MovieCountRepo, reviewRepo service.ReviewCountRepo, genreRepo service.GenreCountRepo, auditRepo service.AuditLogRepo) *UserHandler {
+	return &UserHandler{
+		users:      users,
+		reviews:    reviews,
+		userRepo:   userRepo,
+		movieRepo:  movieRepo,
+		reviewRepo: reviewRepo,
+		genreRepo:  genreRepo,
+		auditRepo:  auditRepo,
+	}
 }
 
 func (h *UserHandler) Me(c *gin.Context) {
@@ -39,11 +54,20 @@ func (h *UserHandler) Me(c *gin.Context) {
 	}
 
 	reviewCount, _ := h.reviews.CountByUser(c.Request.Context(), uid)
+	stats, _ := h.users.GetUserStats(c.Request.Context(), uid)
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"user":          user,
 		"reviews_count": reviewCount,
-	})
+	}
+	if stats != nil {
+		response["average_rating"] = stats.AverageRating
+		if stats.FavoriteGenre != nil {
+			response["favorite_genre"] = stats.FavoriteGenre
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *UserHandler) MyReviews(c *gin.Context) {
@@ -78,21 +102,6 @@ func (h *UserHandler) listReviewsByUser(c *gin.Context, uid int) {
 	c.JSON(http.StatusOK, gin.H{"data": reviews})
 }
 
-func parseReviewFilters(c *gin.Context) models.ReviewFilters {
-	f := models.ReviewFilters{}
-	if minStr := c.Query("min_rating"); minStr != "" {
-		if v, err := strconv.Atoi(minStr); err == nil {
-			f.MinRating = v
-		}
-	}
-	if maxStr := c.Query("max_rating"); maxStr != "" {
-		if v, err := strconv.Atoi(maxStr); err == nil {
-			f.MaxRating = v
-		}
-	}
-	return f
-}
-
 type updateRoleRequest struct {
 	Role string `json:"role" validate:"required,oneof=user admin"`
 }
@@ -100,7 +109,13 @@ type updateRoleRequest struct {
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	resp, err := h.users.List(c.Request.Context(), page, limit)
+	
+	filters := models.UserFilters{
+		Search: c.Query("search"),
+		Role:   c.Query("role"),
+	}
+	
+	resp, err := h.users.List(c.Request.Context(), filters, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
 		return
@@ -212,4 +227,114 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	userIDStr, _ := c.Get(string(middleware.ContextUserID))
+	uid, err := strconv.Atoi(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+
+	var req models.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	user, err := h.users.UpdateProfile(c.Request.Context(), uid, req)
+	if err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case service.ErrUserExists:
+			c.JSON(http.StatusConflict, gin.H{"error": "email or username already exists"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update profile"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) UpdatePassword(c *gin.Context) {
+	userIDStr, _ := c.Get(string(middleware.ContextUserID))
+	uid, err := strconv.Atoi(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+
+	var req models.UpdatePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.users.UpdatePassword(c.Request.Context(), uid, req.CurrentPassword, req.NewPassword); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case service.ErrInvalidCredentials:
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid current password"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		}
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *UserHandler) GetStats(c *gin.Context) {
+	stats, err := h.users.GetAdminStats(
+		c.Request.Context(),
+		h.userRepo,
+		h.movieRepo,
+		h.reviewRepo,
+		h.genreRepo,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get stats"})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}
+
+func (h *UserHandler) ListAuditLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	filters := models.AuditLogFilters{
+		Event: c.Query("event"),
+	}
+
+	if userIDStr := c.Query("user_id"); userIDStr != "" {
+		if userID, err := strconv.Atoi(userIDStr); err == nil {
+			filters.UserID = &userID
+		}
+	}
+
+	if fromDateStr := c.Query("from_date"); fromDateStr != "" {
+		if fromDate, err := time.Parse("2006-01-02", fromDateStr); err == nil {
+			filters.FromDate = &fromDate
+		}
+	}
+
+	if toDateStr := c.Query("to_date"); toDateStr != "" {
+		if toDate, err := time.Parse("2006-01-02", toDateStr); err == nil {
+			filters.ToDate = &toDate
+		}
+	}
+
+	resp, err := h.users.ListAuditLogs(c.Request.Context(), h.auditRepo, filters, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list audit logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

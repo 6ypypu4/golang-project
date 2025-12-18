@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
 
 	"golang-project/internal/models"
 )
@@ -33,15 +36,45 @@ func (r *ReviewRepository) GetByID(ctx context.Context, id int) (*models.Review,
 }
 
 func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
-	rows, err := r.db.QueryContext(
-		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE movie_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		movieID, limit, offset,
-	)
+	whereParts := []string{"movie_id = $1"}
+	args := []interface{}{movieID}
+	argPos := 2
+
+	if filters.MinRating > 0 {
+		args = append(args, filters.MinRating)
+		whereParts = append(whereParts, fmt.Sprintf("rating >= $%d", argPos))
+		argPos++
+	}
+	if filters.MaxRating > 0 {
+		args = append(args, filters.MaxRating)
+		whereParts = append(whereParts, fmt.Sprintf("rating <= $%d", argPos))
+		argPos++
+	}
+
+	whereSQL := strings.Join(whereParts, " AND ")
+
+	orderBy := "created_at DESC"
+	switch filters.Sort {
+	case "rating_desc":
+		orderBy = "rating DESC"
+	case "rating_asc":
+		orderBy = "rating ASC"
+	case "created_desc":
+		orderBy = "created_at DESC"
+	case "created_asc":
+		orderBy = "created_at ASC"
+	}
+
+	args = append(args, limit, offset)
+	query := fmt.Sprintf(`
+		SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+		FROM reviews
+		WHERE %s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, orderBy, argPos, argPos+1)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,15 +95,45 @@ func (r *ReviewRepository) GetByMovieID(ctx context.Context, movieID int, filter
 }
 
 func (r *ReviewRepository) GetByUserID(ctx context.Context, userID int, filters models.ReviewFilters, limit, offset int) ([]models.Review, error) {
-	rows, err := r.db.QueryContext(
-		ctx,
-		`SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
-		 FROM reviews
-		 WHERE user_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		userID, limit, offset,
-	)
+	whereParts := []string{"user_id = $1"}
+	args := []interface{}{userID}
+	argPos := 2
+
+	if filters.MinRating > 0 {
+		args = append(args, filters.MinRating)
+		whereParts = append(whereParts, fmt.Sprintf("rating >= $%d", argPos))
+		argPos++
+	}
+	if filters.MaxRating > 0 {
+		args = append(args, filters.MaxRating)
+		whereParts = append(whereParts, fmt.Sprintf("rating <= $%d", argPos))
+		argPos++
+	}
+
+	whereSQL := strings.Join(whereParts, " AND ")
+
+	orderBy := "created_at DESC"
+	switch filters.Sort {
+	case "rating_desc":
+		orderBy = "rating DESC"
+	case "rating_asc":
+		orderBy = "rating ASC"
+	case "created_desc":
+		orderBy = "created_at DESC"
+	case "created_asc":
+		orderBy = "created_at ASC"
+	}
+
+	args = append(args, limit, offset)
+	query := fmt.Sprintf(`
+		SELECT id, movie_id, user_id, rating, title, content, created_at, updated_at
+		FROM reviews
+		WHERE %s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, orderBy, argPos, argPos+1)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -151,4 +214,55 @@ func (r *ReviewRepository) CountByUserID(ctx context.Context, userID int) (int, 
 		userID,
 	).Scan(&count)
 	return count, err
+}
+
+func (r *ReviewRepository) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM reviews").Scan(&count)
+	return count, err
+}
+
+func (r *ReviewRepository) CountLast7Days(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM reviews WHERE created_at >= NOW() - INTERVAL '7 days'").Scan(&count)
+	return count, err
+}
+
+func (r *ReviewRepository) GetAverageRatingByUserID(ctx context.Context, userID int) (float64, error) {
+	var avg sql.NullFloat64
+	err := r.db.QueryRowContext(
+		ctx,
+		"SELECT AVG(rating) FROM reviews WHERE user_id = $1",
+		userID,
+	).Scan(&avg)
+	if err != nil {
+		return 0, err
+	}
+	if !avg.Valid {
+		return 0, nil
+	}
+	return avg.Float64, nil
+}
+
+func (r *ReviewRepository) GetFavoriteGenreByUserID(ctx context.Context, userID int) (*models.Genre, error) {
+	var genre models.Genre
+	err := r.db.QueryRowContext(
+		ctx,
+		`SELECT g.id, g.name, g.created_at
+		 FROM genres g
+		 INNER JOIN movie_genres mg ON g.id = mg.genre_id
+		 INNER JOIN reviews r ON r.movie_id = mg.movie_id
+		 WHERE r.user_id = $1
+		 GROUP BY g.id, g.name, g.created_at
+		 ORDER BY COUNT(*) DESC
+		 LIMIT 1`,
+		userID,
+	).Scan(&genre.ID, &genre.Name, &genre.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &genre, nil
 }

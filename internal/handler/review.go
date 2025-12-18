@@ -30,13 +30,30 @@ func (h *ReviewHandler) ListByMovie(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	reviews, err := h.service.ListByMovie(c.Request.Context(), movieID, page, limit)
+	filters := parseReviewFilters(c)
+	reviews, err := h.service.ListByMovie(c.Request.Context(), movieID, filters, page, limit)
 	if err != nil {
 		log.Printf("ListByMovie error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list reviews"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": reviews})
+}
+
+func parseReviewFilters(c *gin.Context) models.ReviewFilters {
+	f := models.ReviewFilters{}
+	if minStr := c.Query("min_rating"); minStr != "" {
+		if v, err := strconv.Atoi(minStr); err == nil {
+			f.MinRating = v
+		}
+	}
+	if maxStr := c.Query("max_rating"); maxStr != "" {
+		if v, err := strconv.Atoi(maxStr); err == nil {
+			f.MaxRating = v
+		}
+	}
+	f.Sort = c.Query("sort")
+	return f
 }
 
 func (h *ReviewHandler) Create(c *gin.Context) {
