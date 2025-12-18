@@ -504,6 +504,69 @@ func TestIntegration_Flow(t *testing.T) {
 	deleteReview(t, router, adminToken, reviewID)
 }
 
+func TestIntegration_ReviewCreate_Unauthorized(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	body, _ := json.Marshal(models.CreateReviewRequest{Rating: 9, Title: "Title", Content: "Body"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/movies/"+movieID+"/reviews", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("create review without token expected 401, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_ReviewUpdate_ForbiddenForOtherUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	register(t, router, "user1@example.com", "user1", "password123")
+	user1Token := login(t, router, "user1@example.com", "password123")
+
+	register(t, router, "user2@example.com", "user2", "password123")
+	user2Token := login(t, router, "user2@example.com", "password123")
+
+	reviewID := createReview(t, router, user1Token, movieID, 9, "Title", "Body")
+
+	body, _ := json.Marshal(models.UpdateReviewRequest{Rating: 5, Title: "Other user", Content: "Should be forbidden"})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/reviews/"+reviewID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+user2Token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("update review by other user expected 403, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminEndpoints_ForbiddenForUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	register(t, router, "user@example.com", "user", "password123")
+	userToken := login(t, router, "user@example.com", "password123")
+
+	body, _ := json.Marshal(models.CreateGenreRequest{Name: "UserGenre"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/genres", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("create genre as user expected 403, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
 func login(t *testing.T, r *gin.Engine, email, password string) string {
 	body, _ := json.Marshal(models.LoginRequest{Email: email, Password: password})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBuffer(body))
