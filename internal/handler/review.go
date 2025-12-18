@@ -52,8 +52,13 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	userID, ok := val.(int)
+	userIDStr, ok := val.(string)
 	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}
@@ -99,8 +104,13 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	userID, ok := val.(int)
+	userIDStr, ok := val.(string)
 	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}
@@ -146,8 +156,13 @@ func (h *ReviewHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
-	userID, ok := val.(int)
+	userIDStr, ok := val.(string)
 	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
+		return
+	}
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}

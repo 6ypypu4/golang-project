@@ -14,7 +14,14 @@ import (
 
 func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	router := gin.New()
-	router.Use(middleware.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS(), middleware.BodyLimit(1<<20))
+	router.Use(
+		middleware.RequestID(),
+		middleware.Logger(),
+		middleware.RateLimit(60),
+		gin.Recovery(),
+		middleware.CORS(),
+		middleware.BodyLimit(1<<20),
+	)
 
 	v := validator.New()
 	userRepo := repository.NewUserRepository(db)

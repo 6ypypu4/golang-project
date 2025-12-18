@@ -83,6 +83,33 @@ go run cmd/api/main.go
 
 Сервер будет доступен на http://localhost:8080
 
+## Rate limiting
+
+В API включён простой in-memory rate limiting middleware:
+
+- лимит: 60 запросов в минуту на один IP-адрес
+- при превышении возвращается `429 Too Many Requests` с телом:
+  - `{"error":"rate limit exceeded"}`
+
+Логика находится в `internal/middleware/ratelimit.go` и подключена глобально для всех HTTP-запросов.
+
+## Postman collection
+
+В корне репозитория лежит файл `postman_collection.json` с примерными запросами:
+
+- Auth: регистрация и логин (`/api/v1/auth/register`, `/api/v1/auth/login`)
+- Genres: список и создание жанра (для admin)
+- Movies: список и создание фильма (для admin)
+- Reviews: создание отзыва авторизованным пользователем
+
+Как использовать:
+
+1. Импортируйте `postman_collection.json` в Postman.
+2. В переменной `base_url` оставьте `http://localhost:8080` или измените при необходимости.
+3. Зарегистрируйте пользователя и залогиньтесь, возьмите токен и заполните:
+   - `{{admin_token}}` — токен admin-пользователя
+   - `{{user_token}}` — токен обычного пользователя
+
 ## Переменные окружения
 
 | Переменная | Описание | Обязательная | По умолчанию |
