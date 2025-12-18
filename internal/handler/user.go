@@ -150,3 +150,66 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	uid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	var req models.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := h.users.Update(c.Request.Context(), uid, req); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case service.ErrUserExists:
+			c.JSON(http.StatusConflict, gin.H{"error": "email or username already exists"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		}
+		return
+	}
+
+	user, err := h.users.GetByID(c.Request.Context(), uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get updated user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	uid, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	adminIDStr, _ := c.Get(string(middleware.ContextUserID))
+	adminID, err := strconv.Atoi(adminIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid admin user"})
+		return
+	}
+
+	if err := h.users.Delete(c.Request.Context(), uid, adminID); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case service.ErrCannotDeleteSelf:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete yourself"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		}
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}

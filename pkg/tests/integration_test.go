@@ -86,6 +86,17 @@ func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.Use
 	return result[offset:end], total, nil
 }
 
+func (r *memUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, u := range r.byID {
+		if u.Username == username {
+			return u, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (r *memUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -94,6 +105,37 @@ func (r *memUserRepo) UpdateRole(ctx context.Context, id int, role string) error
 		return nil
 	}
 	return sql.ErrNoRows
+}
+
+func (r *memUserRepo) Update(ctx context.Context, id int, email, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.byID[id]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	if email != "" && email != u.Email {
+		delete(r.byEmail, u.Email)
+		u.Email = email
+		r.byEmail[email] = u
+	}
+	if username != "" {
+		u.Username = username
+	}
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
+func (r *memUserRepo) Delete(ctx context.Context, id int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.byID[id]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	delete(r.byID, id)
+	delete(r.byEmail, u.Email)
+	return nil
 }
 
 type memGenreRepo struct {
@@ -462,7 +504,9 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	admin := api.Group("/", middleware.AuthMiddleware(secret), middleware.RequireRoles("admin"))
 	admin.GET("/users", userH.ListUsers)
 	admin.GET("/users/:id", userH.GetUser)
+	admin.PUT("/users/:id", userH.UpdateUser)
 	admin.PUT("/users/:id/role", userH.UpdateRole)
+	admin.DELETE("/users/:id", userH.DeleteUser)
 	admin.POST("/genres", genreH.Create)
 	admin.PUT("/genres/:id", genreH.Update)
 	admin.DELETE("/genres/:id", genreH.Delete)
@@ -844,6 +888,106 @@ func TestIntegration_MovieReviewsList(t *testing.T) {
 	}
 	if resp["data"] == nil {
 		t.Fatalf("/movies/:id/reviews response should contain 'data'")
+	}
+}
+
+func TestIntegration_AdminUpdateUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	body, _ := json.Marshal(models.UpdateUserRequest{
+		Email:    "updated@example.com",
+		Username: "updateduser",
+	})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/users/"+userID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin PUT /users/:id expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var updatedUser models.User
+	if err := json.Unmarshal(w.Body.Bytes(), &updatedUser); err != nil {
+		t.Fatalf("parse updated user err=%v", err)
+	}
+	if updatedUser.Email != "updated@example.com" {
+		t.Fatalf("expected email updated@example.com, got %s", updatedUser.Email)
+	}
+	if updatedUser.Username != "updateduser" {
+		t.Fatalf("expected username updateduser, got %s", updatedUser.Username)
+	}
+}
+
+func TestIntegration_AdminDeleteUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+userID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE /users/:id expected 204, got %d body %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("get deleted user expected 404, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminDeleteSelf_Forbidden(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+
+	var adminResp map[string]interface{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &adminResp)
+	adminData := adminResp["user"].(map[string]interface{})
+	adminID := strconv.Itoa(int(adminData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+adminID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("admin DELETE self expected 400, got %d body %s", w.Code, w.Body.String())
 	}
 }
 

@@ -65,10 +65,47 @@ func (r *memoryUserRepo) List(ctx context.Context, limit, offset int) ([]models.
 	return result[offset:end], total, nil
 }
 
+func (r *memoryUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	for _, u := range r.users {
+		if u.Username == username {
+			return u, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (r *memoryUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	for _, u := range r.users {
 		if u.ID == id {
 			u.Role = role
+			return nil
+		}
+	}
+	return sql.ErrNoRows
+}
+
+func (r *memoryUserRepo) Update(ctx context.Context, id int, email, username string) error {
+	for _, u := range r.users {
+		if u.ID == id {
+			if email != "" {
+				delete(r.users, u.Email)
+				u.Email = email
+				r.users[email] = u
+			}
+			if username != "" {
+				u.Username = username
+			}
+			u.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	return sql.ErrNoRows
+}
+
+func (r *memoryUserRepo) Delete(ctx context.Context, id int) error {
+	for email, u := range r.users {
+		if u.ID == id {
+			delete(r.users, email)
 			return nil
 		}
 	}
