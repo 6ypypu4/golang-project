@@ -434,7 +434,7 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	authSvc := service.NewAuthService(userRepo, validator, secret)
 	genreSvc := service.NewGenreService(genreRepo, validator)
 	movieSvc := service.NewMovieService(movieRepo, genreRepo, validator)
-	reviewSvc := service.NewReviewService(reviewRepo, movieRepo, validator)
+	reviewSvc := service.NewReviewService(reviewRepo, movieRepo, validator, nil)
 
 	authH := handler.NewAuthHandler(authSvc)
 	genreH := handler.NewGenreHandler(genreSvc)

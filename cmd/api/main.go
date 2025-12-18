@@ -25,6 +25,10 @@ func main() {
 		log.Fatalf("init database: %v", err)
 	}
 
+	if err := initializer.InitializeWorkers(ctx); err != nil {
+		log.Fatalf("init workers: %v", err)
+	}
+
 	if err := initializer.InitializeRouter(); err != nil {
 		log.Fatalf("init router: %v", err)
 	}

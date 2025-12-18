@@ -10,6 +10,8 @@ import (
 
 	"golang-project/internal/database"
 	"golang-project/internal/handler"
+	"golang-project/internal/repository"
+	"golang-project/internal/service"
 )
 
 // AppInitializer initializes application components
@@ -18,6 +20,7 @@ type AppInitializer struct {
 	db     *sql.DB
 	router http.Handler
 	server *http.Server
+	events chan service.ReviewEvent
 }
 
 func NewAppInitializer() *AppInitializer {
@@ -60,6 +63,23 @@ func (ai *AppInitializer) InitializeDatabase(ctx context.Context) error {
 	return nil
 }
 
+// InitializeWorkers starts background workers
+func (ai *AppInitializer) InitializeWorkers(ctx context.Context) error {
+	if ai.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	log.Println("initializing workers")
+	ai.events = make(chan service.ReviewEvent, 100)
+
+	auditRepo := repository.NewAuditRepository(ai.db)
+	movieRepo := repository.NewMovieRepository(ai.db)
+	service.StartReviewWorker(ctx, ai.events, movieRepo, auditRepo)
+
+	log.Println("review worker started")
+	return nil
+}
+
 // InitializeRouter sets up HTTP routes
 func (ai *AppInitializer) InitializeRouter() error {
 	if ai.db == nil {
@@ -67,7 +87,7 @@ func (ai *AppInitializer) InitializeRouter() error {
 	}
 
 	log.Println("initializing router")
-	ai.router = handler.SetupRoutes(ai.db, ai.config.JWTSecret)
+	ai.router = handler.SetupRoutes(ai.db, ai.config.JWTSecret, ai.events)
 	return nil
 }
 

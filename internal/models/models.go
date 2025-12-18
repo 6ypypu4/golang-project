@@ -51,6 +51,16 @@ type Review struct {
 	Movie     *Movie    `json:"movie,omitempty"`
 }
 
+type AuditLog struct {
+	ID        int       `json:"id" db:"id"`
+	UserID    *int      `json:"user_id" db:"user_id"`
+	MovieID   *int      `json:"movie_id" db:"movie_id"`
+	ReviewID  *int      `json:"review_id" db:"review_id"`
+	Event     string    `json:"event" db:"event"`
+	Details   string    `json:"details" db:"details"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
 type CreateUserRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Username string `json:"username" validate:"required,min=3,max=100"`
