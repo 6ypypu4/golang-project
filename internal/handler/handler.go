@@ -9,19 +9,12 @@ import (
 
 	"golang-project/internal/middleware"
 	"golang-project/internal/repository"
+	"golang-project/internal/router"
 	"golang-project/internal/service"
 )
 
 func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
-	router := gin.New()
-	router.Use(
-		middleware.RequestID(),
-		middleware.Logger(),
-		middleware.RateLimit(60),
-		gin.Recovery(),
-		middleware.CORS(),
-		middleware.BodyLimit(1<<20),
-	)
+	router := router.New()
 
 	v := validator.New()
 	userRepo := repository.NewUserRepository(db)

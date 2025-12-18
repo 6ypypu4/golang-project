@@ -1,8 +1,20 @@
 package router
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
 
-// New returns a bare Gin engine. For real routes use handler.SetupRoutes in cmd/api.
+	"golang-project/internal/middleware"
+)
+
 func New() *gin.Engine {
-	return gin.New()
+	r := gin.New()
+	r.Use(
+		middleware.RequestID(),
+		middleware.Logger(),
+		middleware.RateLimit(60),
+		gin.Recovery(),
+		middleware.CORS(),
+		middleware.BodyLimit(1<<20),
+	)
+	return r
 }
