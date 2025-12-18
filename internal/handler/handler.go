@@ -11,7 +11,18 @@ import (
 	"golang-project/internal/repository"
 	"golang-project/internal/router"
 	"golang-project/internal/service"
+	"golang-project/pkg/jwt"
 )
+
+type jwtPasswordHasher struct{}
+
+func (h *jwtPasswordHasher) HashPassword(password string) (string, error) {
+	return jwt.HashPassword(password)
+}
+
+func (h *jwtPasswordHasher) CheckPassword(hash, password string) error {
+	return jwt.CheckPassword(hash, password)
+}
 
 func SetupRoutes(db *sql.DB, jwtSecret string, events chan service.ReviewEvent) *gin.Engine {
 	router := router.New()
@@ -20,18 +31,20 @@ func SetupRoutes(db *sql.DB, jwtSecret string, events chan service.ReviewEvent) 
 	userRepo := repository.NewUserRepository(db)
 	authService := service.NewAuthService(userRepo, v, jwtSecret)
 	authHandler := NewAuthHandler(authService)
-	userService := service.NewUserService(userRepo, v)
+	reviewRepo := repository.NewReviewRepository(db)
+	passwordHasher := &jwtPasswordHasher{}
+	userService := service.NewUserService(userRepo, reviewRepo, v, passwordHasher)
 
 	genreRepo := repository.NewGenreRepository(db)
 	movieRepo := repository.NewMovieRepository(db)
-	reviewRepo := repository.NewReviewRepository(db)
 	genreService := service.NewGenreService(genreRepo, v)
 	movieService := service.NewMovieService(movieRepo, genreRepo, v)
 	reviewService := service.NewReviewService(reviewRepo, movieRepo, v, events)
 	genreHandler := NewGenreHandler(genreService)
 	movieHandler := NewMovieHandler(movieService)
 	reviewHandler := NewReviewHandler(reviewService)
-	userHandler := NewUserHandler(userService, reviewService)
+	auditRepo := repository.NewAuditRepository(db)
+	userHandler := NewUserHandler(userService, reviewService, userRepo, movieRepo, reviewRepo, genreRepo, auditRepo)
 
 	api := router.Group("/api/v1")
 
@@ -49,6 +62,8 @@ func SetupRoutes(db *sql.DB, jwtSecret string, events chan service.ReviewEvent) 
 
 	protected := api.Group("/", middleware.AuthMiddleware(jwtSecret))
 	protected.GET("/me", userHandler.Me)
+	protected.PUT("/me", userHandler.UpdateProfile)
+	protected.PUT("/me/password", userHandler.UpdatePassword)
 	protected.GET("/me/reviews", userHandler.MyReviews)
 	protected.POST("/movies/:id/reviews", reviewHandler.Create)
 	protected.PUT("/reviews/:id", reviewHandler.Update)
@@ -62,6 +77,8 @@ func SetupRoutes(db *sql.DB, jwtSecret string, events chan service.ReviewEvent) 
 	admin.PUT("/users/:id", userHandler.UpdateUser)
 	admin.PUT("/users/:id/role", userHandler.UpdateRole)
 	admin.DELETE("/users/:id", userHandler.DeleteUser)
+	admin.GET("/stats", userHandler.GetStats)
+	admin.GET("/audit-logs", userHandler.ListAuditLogs)
 	admin.POST("/genres", genreHandler.Create)
 	admin.PUT("/genres/:id", genreHandler.Update)
 	admin.DELETE("/genres/:id", genreHandler.Delete)

@@ -48,7 +48,7 @@ func NewReviewService(reviews ReviewRepo, movies MovieLookup, v *validator.Valid
 	}
 }
 
-func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, page, limit int) ([]models.Review, error) {
+func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, filters models.ReviewFilters, page, limit int) ([]models.Review, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -56,7 +56,6 @@ func (s *ReviewService) ListByMovie(ctx context.Context, movieID int, page, limi
 		limit = 10
 	}
 	offset := (page - 1) * limit
-	filters := models.ReviewFilters{}
 	return s.reviews.GetByMovieID(ctx, movieID, filters, limit, offset)
 }
 

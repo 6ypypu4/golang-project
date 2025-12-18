@@ -99,6 +99,22 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 		return nil, 0, err
 	}
 
+	orderBy := "m.created_at DESC"
+	switch filters.Sort {
+	case "rating_desc":
+		orderBy = "m.average_rating DESC NULLS LAST"
+	case "rating_asc":
+		orderBy = "m.average_rating ASC NULLS LAST"
+	case "year_desc":
+		orderBy = "m.release_year DESC"
+	case "year_asc":
+		orderBy = "m.release_year ASC"
+	case "title_asc":
+		orderBy = "m.title ASC"
+	case "title_desc":
+		orderBy = "m.title DESC"
+	}
+
 	argsWithPage := append([]interface{}{}, args...)
 	argsWithPage = append(argsWithPage, limit, offset)
 
@@ -111,9 +127,9 @@ func (r *MovieRepository) List(ctx context.Context, filters models.MovieFilters,
 		LEFT JOIN genres g ON g.id = mg.genre_id
 		WHERE %s
 		GROUP BY m.id
-		ORDER BY m.created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, whereSQL, len(args)+1, len(args)+2)
+	`, whereSQL, orderBy, len(args)+1, len(args)+2)
 
 	rows, err := r.db.QueryContext(ctx, query, argsWithPage...)
 	if err != nil {
@@ -211,5 +227,23 @@ func (r *MovieRepository) GetGenresByMovieID(ctx context.Context, movieID int) (
 func (r *MovieRepository) Count(ctx context.Context) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM movies").Scan(&count)
+	return count, err
+}
+
+func (r *MovieRepository) GetAverageRating(ctx context.Context) (float64, error) {
+	var avg sql.NullFloat64
+	err := r.db.QueryRowContext(ctx, "SELECT AVG(average_rating) FROM movies WHERE average_rating > 0").Scan(&avg)
+	if err != nil {
+		return 0, err
+	}
+	if !avg.Valid {
+		return 0, nil
+	}
+	return avg.Float64, nil
+}
+
+func (r *MovieRepository) CountLast7Days(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM movies WHERE created_at >= NOW() - INTERVAL '7 days'").Scan(&count)
 	return count, err
 }

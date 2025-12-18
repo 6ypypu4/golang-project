@@ -25,6 +25,7 @@ func (h *MovieHandler) List(c *gin.Context) {
 	var filters models.MovieFilters
 	filters.Genre = c.Query("genre")
 	filters.Search = c.Query("search")
+	filters.Sort = c.Query("sort")
 	if yearStr := c.Query("year"); yearStr != "" {
 		if year, err := strconv.Atoi(yearStr); err == nil {
 			filters.Year = year

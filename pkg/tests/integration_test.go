@@ -68,11 +68,19 @@ func (r *memUserRepo) GetByID(ctx context.Context, id int) (*models.User, error)
 	return nil, sql.ErrNoRows
 }
 
-func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
+func (r *memUserRepo) List(ctx context.Context, filters models.UserFilters, limit, offset int) ([]models.User, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	result := make([]models.User, 0, len(r.byID))
 	for _, u := range r.byID {
+		if filters.Search != "" {
+			if !contains(u.Email, filters.Search) && !contains(u.Username, filters.Search) {
+				continue
+			}
+		}
+		if filters.Role != "" && u.Role != filters.Role {
+			continue
+		}
 		result = append(result, *u)
 	}
 	total := len(result)
@@ -84,6 +92,10 @@ func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.Use
 		end = total
 	}
 	return result[offset:end], total, nil
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0)
 }
 
 func (r *memUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
@@ -136,6 +148,36 @@ func (r *memUserRepo) Delete(ctx context.Context, id int) error {
 	delete(r.byID, id)
 	delete(r.byEmail, u.Email)
 	return nil
+}
+
+func (r *memUserRepo) UpdatePassword(ctx context.Context, id int, passwordHash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.byID[id]; ok {
+		u.PasswordHash = passwordHash
+		u.UpdatedAt = time.Now()
+		return nil
+	}
+	return sql.ErrNoRows
+}
+
+func (r *memUserRepo) Count(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.byID), nil
+}
+
+func (r *memUserRepo) CountLast7Days(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	for _, u := range r.byID {
+		if u.CreatedAt.After(sevenDaysAgo) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 type memGenreRepo struct {
@@ -206,6 +248,12 @@ func (r *memGenreRepo) Delete(ctx context.Context, id int) error {
 	}
 	delete(r.data, id)
 	return nil
+}
+
+func (r *memGenreRepo) Count(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.data), nil
 }
 
 type memMovieRepo struct {
@@ -305,6 +353,42 @@ func (r *memMovieRepo) GetGenresByMovieID(ctx context.Context, movieID int) ([]m
 
 func (r *memMovieRepo) UpdateAverageRating(ctx context.Context, movieID int) error {
 	return nil
+}
+
+func (r *memMovieRepo) Count(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.movies), nil
+}
+
+func (r *memMovieRepo) GetAverageRating(ctx context.Context) (float64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	sum := 0.0
+	count := 0
+	for _, m := range r.movies {
+		if m.AverageRating > 0 {
+			sum += m.AverageRating
+			count++
+		}
+	}
+	if count == 0 {
+		return 0, nil
+	}
+	return sum / float64(count), nil
+}
+
+func (r *memMovieRepo) CountLast7Days(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	for _, m := range r.movies {
+		if m.CreatedAt.After(sevenDaysAgo) {
+			count++
+		}
+	}
+	return count, nil
 }
 
 type memReviewRepo struct {
@@ -461,6 +545,104 @@ func (r *memReviewRepo) CountByUserID(ctx context.Context, userID int) (int, err
 	return count, nil
 }
 
+func (r *memReviewRepo) Count(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.data), nil
+}
+
+func (r *memReviewRepo) CountLast7Days(ctx context.Context) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+	for _, rv := range r.data {
+		if rv.CreatedAt.After(sevenDaysAgo) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r *memReviewRepo) GetAverageRatingByUserID(ctx context.Context, userID int) (float64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	sum := 0
+	count := 0
+	for _, rv := range r.data {
+		if rv.UserID == userID {
+			sum += rv.Rating
+			count++
+		}
+	}
+	if count == 0 {
+		return 0, nil
+	}
+	return float64(sum) / float64(count), nil
+}
+
+func (r *memReviewRepo) GetFavoriteGenreByUserID(ctx context.Context, userID int) (*models.Genre, error) {
+	return nil, nil
+}
+
+type memAuditRepo struct {
+	mu   sync.Mutex
+	logs []models.AuditLog
+}
+
+func newMemAuditRepo() *memAuditRepo {
+	return &memAuditRepo{logs: make([]models.AuditLog, 0)}
+}
+
+func (r *memAuditRepo) Insert(ctx context.Context, log *models.AuditLog) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	log.ID = len(r.logs) + 1
+	log.CreatedAt = time.Now()
+	r.logs = append(r.logs, *log)
+	return nil
+}
+
+func (r *memAuditRepo) List(ctx context.Context, filters models.AuditLogFilters, limit, offset int) ([]models.AuditLog, int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	filtered := make([]models.AuditLog, 0)
+	for _, log := range r.logs {
+		if filters.Event != "" && log.Event != filters.Event {
+			continue
+		}
+		if filters.UserID != nil && (log.UserID == nil || *log.UserID != *filters.UserID) {
+			continue
+		}
+		if filters.FromDate != nil && log.CreatedAt.Before(*filters.FromDate) {
+			continue
+		}
+		if filters.ToDate != nil && log.CreatedAt.After(*filters.ToDate) {
+			continue
+		}
+		filtered = append(filtered, log)
+	}
+	total := len(filtered)
+	if offset >= total {
+		return []models.AuditLog{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return filtered[offset:end], total, nil
+}
+
+type jwtPasswordHasher struct{}
+
+func (h *jwtPasswordHasher) HashPassword(password string) (string, error) {
+	return jwt.HashPassword(password)
+}
+
+func (h *jwtPasswordHasher) CheckPassword(hash, password string) error {
+	return jwt.CheckPassword(hash, password)
+}
+
 func buildTestRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -472,17 +654,20 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	genreRepo := newMemGenreRepo()
 	movieRepo := newMemMovieRepo()
 	reviewRepo := newMemReviewRepo()
+	auditRepo := newMemAuditRepo()
 
 	authSvc := service.NewAuthService(userRepo, validator, secret)
 	genreSvc := service.NewGenreService(genreRepo, validator)
 	movieSvc := service.NewMovieService(movieRepo, genreRepo, validator)
 	reviewSvc := service.NewReviewService(reviewRepo, movieRepo, validator, nil)
+	passwordHasher := &jwtPasswordHasher{}
+	userSvc := service.NewUserService(userRepo, reviewRepo, validator, passwordHasher)
 
 	authH := handler.NewAuthHandler(authSvc)
 	genreH := handler.NewGenreHandler(genreSvc)
 	movieH := handler.NewMovieHandler(movieSvc)
 	reviewH := handler.NewReviewHandler(reviewSvc)
-	userH := handler.NewUserHandler(service.NewUserService(userRepo, validator), reviewSvc)
+	userH := handler.NewUserHandler(userSvc, reviewSvc, userRepo, movieRepo, reviewRepo, genreRepo, auditRepo)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS(), middleware.BodyLimit(1<<20))
