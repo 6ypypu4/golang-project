@@ -86,6 +86,17 @@ func (r *memUserRepo) List(ctx context.Context, limit, offset int) ([]models.Use
 	return result[offset:end], total, nil
 }
 
+func (r *memUserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, u := range r.byID {
+		if u.Username == username {
+			return u, nil
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
 func (r *memUserRepo) UpdateRole(ctx context.Context, id int, role string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -94,6 +105,37 @@ func (r *memUserRepo) UpdateRole(ctx context.Context, id int, role string) error
 		return nil
 	}
 	return sql.ErrNoRows
+}
+
+func (r *memUserRepo) Update(ctx context.Context, id int, email, username string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.byID[id]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	if email != "" && email != u.Email {
+		delete(r.byEmail, u.Email)
+		u.Email = email
+		r.byEmail[email] = u
+	}
+	if username != "" {
+		u.Username = username
+	}
+	u.UpdatedAt = time.Now()
+	return nil
+}
+
+func (r *memUserRepo) Delete(ctx context.Context, id int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.byID[id]
+	if !ok {
+		return sql.ErrNoRows
+	}
+	delete(r.byID, id)
+	delete(r.byEmail, u.Email)
+	return nil
 }
 
 type memGenreRepo struct {
@@ -440,12 +482,16 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	genreH := handler.NewGenreHandler(genreSvc)
 	movieH := handler.NewMovieHandler(movieSvc)
 	reviewH := handler.NewReviewHandler(reviewSvc)
+	userH := handler.NewUserHandler(service.NewUserService(userRepo, validator), reviewSvc)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.RequestID(), middleware.CORS(), middleware.BodyLimit(1<<20))
 
 	api := router.Group("/api/v1")
 
+	api.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	api.POST("/auth/register", authH.Register)
 	api.POST("/auth/login", authH.Login)
 	api.GET("/genres", genreH.List)
@@ -453,12 +499,24 @@ func buildTestRouter(t *testing.T) *gin.Engine {
 	api.GET("/movies", movieH.List)
 	api.GET("/movies/:id", movieH.Get)
 	api.GET("/movies/:id/reviews", reviewH.ListByMovie)
+	api.GET("/users/:id/reviews", userH.UserReviews)
 
 	admin := api.Group("/", middleware.AuthMiddleware(secret), middleware.RequireRoles("admin"))
+	admin.GET("/users", userH.ListUsers)
+	admin.GET("/users/:id", userH.GetUser)
+	admin.PUT("/users/:id", userH.UpdateUser)
+	admin.PUT("/users/:id/role", userH.UpdateRole)
+	admin.DELETE("/users/:id", userH.DeleteUser)
 	admin.POST("/genres", genreH.Create)
+	admin.PUT("/genres/:id", genreH.Update)
+	admin.DELETE("/genres/:id", genreH.Delete)
 	admin.POST("/movies", movieH.Create)
+	admin.PUT("/movies/:id", movieH.Update)
+	admin.DELETE("/movies/:id", movieH.Delete)
 
 	protected := api.Group("/", middleware.AuthMiddleware(secret))
+	protected.GET("/me", userH.Me)
+	protected.GET("/me/reviews", userH.MyReviews)
 	protected.POST("/movies/:id/reviews", reviewH.Create)
 	protected.PUT("/reviews/:id", reviewH.Update)
 	protected.DELETE("/reviews/:id", reviewH.Delete)
@@ -564,6 +622,372 @@ func TestIntegration_AdminEndpoints_ForbiddenForUser(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("create genre as user expected 403, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_Health(t *testing.T) {
+	router := buildTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("health expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse health response err=%v", err)
+	}
+	if resp["status"] != "ok" {
+		t.Fatalf("health status expected 'ok', got %v", resp["status"])
+	}
+}
+
+func TestIntegration_Me(t *testing.T) {
+	router := buildTestRouter(t)
+
+	register(t, router, "user@example.com", "user", "password123")
+	userToken := login(t, router, "user@example.com", "password123")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("me expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse me response err=%v", err)
+	}
+	if resp["user"] == nil {
+		t.Fatalf("me response should contain 'user'")
+	}
+}
+
+func TestIntegration_MeReviews(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	register(t, router, "user@example.com", "user", "password123")
+	userToken := login(t, router, "user@example.com", "password123")
+
+	createReview(t, router, userToken, movieID, 9, "Great", "Nice")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me/reviews", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("me/reviews expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse me/reviews response err=%v", err)
+	}
+	if resp["data"] == nil {
+		t.Fatalf("me/reviews response should contain 'data'")
+	}
+}
+
+func TestIntegration_UserReviews(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	register(t, router, "user@example.com", "user", "password123")
+	userToken := login(t, router, "user@example.com", "password123")
+
+	createReview(t, router, userToken, movieID, 9, "Great", "Nice")
+
+	var userResp map[string]interface{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID+"/reviews", nil)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("users/:id/reviews expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse users/:id/reviews response err=%v", err)
+	}
+	if resp["data"] == nil {
+		t.Fatalf("users/:id/reviews response should contain 'data'")
+	}
+}
+
+func TestIntegration_AdminUsers(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin GET /users expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminGetUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin GET /users/:id expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminUpdateRole(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	body, _ := json.Marshal(map[string]string{"role": "admin"})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/users/"+userID+"/role", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("admin PUT /users/:id/role expected 204, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminGenresUpdateDelete(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+
+	body, _ := json.Marshal(models.CreateGenreRequest{Name: "Updated Drama"})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/genres/"+genreID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin PUT /genres/:id expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/genres/"+genreID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE /genres/:id expected 204, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminMoviesUpdateDelete(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	body, _ := json.Marshal(models.CreateMovieRequest{
+		Title:           "Updated Inception",
+		ReleaseYear:     2021,
+		DurationMinutes: 120,
+		GenreIDs:        []string{genreID},
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/movies/"+movieID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin PUT /movies/:id expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/movies/"+movieID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE /movies/:id expected 204, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_MovieReviewsList(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	genreID := createGenre(t, router, adminToken, "Drama")
+	movieID := createMovie(t, router, adminToken, "Inception", genreID)
+
+	register(t, router, "user@example.com", "user", "password123")
+	userToken := login(t, router, "user@example.com", "password123")
+
+	createReview(t, router, userToken, movieID, 9, "Great", "Nice")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/movies/"+movieID+"/reviews", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /movies/:id/reviews expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse /movies/:id/reviews response err=%v", err)
+	}
+	if resp["data"] == nil {
+		t.Fatalf("/movies/:id/reviews response should contain 'data'")
+	}
+}
+
+func TestIntegration_AdminUpdateUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	body, _ := json.Marshal(models.UpdateUserRequest{
+		Email:    "updated@example.com",
+		Username: "updateduser",
+	})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/users/"+userID, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("admin PUT /users/:id expected 200, got %d body %s", w.Code, w.Body.String())
+	}
+	var updatedUser models.User
+	if err := json.Unmarshal(w.Body.Bytes(), &updatedUser); err != nil {
+		t.Fatalf("parse updated user err=%v", err)
+	}
+	if updatedUser.Email != "updated@example.com" {
+		t.Fatalf("expected email updated@example.com, got %s", updatedUser.Email)
+	}
+	if updatedUser.Username != "updateduser" {
+		t.Fatalf("expected username updateduser, got %s", updatedUser.Username)
+	}
+}
+
+func TestIntegration_AdminDeleteUser(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+	register(t, router, "user@example.com", "user", "password123")
+
+	var userResp map[string]interface{}
+	userToken := login(t, router, "user@example.com", "password123")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+userToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &userResp)
+	userData := userResp["user"].(map[string]interface{})
+	userID := strconv.Itoa(int(userData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+userID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE /users/:id expected 204, got %d body %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/users/"+userID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("get deleted user expected 404, got %d body %s", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegration_AdminDeleteSelf_Forbidden(t *testing.T) {
+	router := buildTestRouter(t)
+
+	adminToken := login(t, router, "admin@example.com", "adminpass")
+
+	var adminResp map[string]interface{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &adminResp)
+	adminData := adminResp["user"].(map[string]interface{})
+	adminID := strconv.Itoa(int(adminData["id"].(float64)))
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/users/"+adminID, nil)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("admin DELETE self expected 400, got %d body %s", w.Code, w.Body.String())
 	}
 }
 

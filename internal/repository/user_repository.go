@@ -11,9 +11,12 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetByUsername(ctx context.Context, username string) (*models.User, error)
 	GetByID(ctx context.Context, id int) (*models.User, error)
 	List(ctx context.Context, limit, offset int) ([]models.User, int, error)
 	UpdateRole(ctx context.Context, id int, role string) error
+	Update(ctx context.Context, id int, email, username string) error
+	Delete(ctx context.Context, id int) error
 }
 
 type PostgresUserRepository struct {
@@ -46,6 +49,25 @@ func (r *PostgresUserRepository) GetByEmail(ctx context.Context, email string) (
 	`
 	var u models.User
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
+		&u.ID, &u.Email, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (r *PostgresUserRepository) GetByUsername(ctx context.Context, username string) (*models.User, error) {
+	query := `
+		SELECT id, email, username, password_hash, role, created_at, updated_at
+		FROM users
+		WHERE username = $1
+	`
+	var u models.User
+	err := r.db.QueryRowContext(ctx, query, username).Scan(
 		&u.ID, &u.Email, &u.Username, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
@@ -108,4 +130,41 @@ func (r *PostgresUserRepository) UpdateRole(ctx context.Context, id int, role st
 		WHERE id = $2
 	`, role, id)
 	return err
+}
+
+func (r *PostgresUserRepository) Update(ctx context.Context, id int, email, username string) error {
+	query := `
+		UPDATE users 
+		SET email = COALESCE(NULLIF($1, ''), email),
+		    username = COALESCE(NULLIF($2, ''), username),
+		    updated_at = NOW()
+		WHERE id = $3
+	`
+	result, err := r.db.ExecContext(ctx, query, email, username, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *PostgresUserRepository) Delete(ctx context.Context, id int) error {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

@@ -134,6 +134,10 @@ func (ai *AppInitializer) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	if ai.events != nil {
+		close(ai.events)
+	}
+
 	if err := database.CloseDB(); err != nil {
 		log.Printf("database close error: %v", err)
 	}
