@@ -13,7 +13,7 @@ services:
       - PORT=8080
       - DB_DSN=postgres://app:app@db:5432/app?sslmode=disable
       - JWT_SECRET=changeme
-      - MIGRATIONS_PATH=internal/migrations
+      - MIGRATIONS_PATH=/internal/migrations
     depends_on:
       - db
 
@@ -29,7 +29,7 @@ services:
       - PORT=8081
       - DB_DSN=postgres://app:app@db:5432/app?sslmode=disable
       - JWT_SECRET=changeme
-      - MIGRATIONS_PATH=internal/migrations
+      - MIGRATIONS_PATH=/internal/migrations
     depends_on:
       - db
 

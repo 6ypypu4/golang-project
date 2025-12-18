@@ -23,6 +23,7 @@ RUN go build -o /out/admin ./cmd/admin
 # Runtime image for API
 FROM gcr.io/distroless/static:nonroot AS api
 COPY --from=build-api /out/api /api
+COPY --from=base /app/internal/migrations /internal/migrations
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/api"]
@@ -30,6 +31,7 @@ ENTRYPOINT ["/api"]
 # Runtime image for Admin
 FROM gcr.io/distroless/static:nonroot AS admin
 COPY --from=build-admin /out/admin /admin
+COPY --from=base /app/internal/migrations /internal/migrations
 USER nonroot:nonroot
 EXPOSE 8081
 ENTRYPOINT ["/admin"]
