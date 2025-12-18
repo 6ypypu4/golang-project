@@ -12,7 +12,7 @@ func Logger() gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		reqID := param.Request.Header.Get(requestIDHeader)
 		if reqID == "" {
-			if val, ok := param.Keys[string(ContextUserID)]; ok {
+			if val, ok := param.Keys[string(ContextUserID)]; ok && val != nil {
 				if s, ok := val.(string); ok {
 					reqID = s
 				}

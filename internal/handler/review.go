@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -31,6 +32,7 @@ func (h *ReviewHandler) ListByMovie(c *gin.Context) {
 
 	reviews, err := h.service.ListByMovie(c.Request.Context(), movieID, page, limit)
 	if err != nil {
+		log.Printf("ListByMovie error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list reviews"})
 		return
 	}
@@ -44,9 +46,14 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
 		return
 	}
-	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userID, err := strconv.Atoi(userIDStr.(string))
-	if err != nil {
+
+	val, ok := c.Get(string(middleware.ContextUserID))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := val.(int)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}
@@ -57,18 +64,25 @@ func (h *ReviewHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if req.Rating < 1 || req.Rating > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "rating must be between 1 and 10"})
+		return
+	}
+
 	review, err := h.service.Create(c.Request.Context(), movieID, userID, req)
 	if err != nil {
+		log.Printf("CreateReview error: %v", err)
 		switch err {
 		case service.ErrMovieNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": "movie not found"})
 		case service.ErrReviewExists:
 			c.JSON(http.StatusConflict, gin.H{"error": "review already exists"})
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
+
 	c.JSON(http.StatusCreated, review)
 }
 
@@ -79,9 +93,14 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review id"})
 		return
 	}
-	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userID, err := strconv.Atoi(userIDStr.(string))
-	if err != nil {
+
+	val, ok := c.Get(string(middleware.ContextUserID))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := val.(int)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}
@@ -92,18 +111,25 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		return
 	}
 
+	if req.Rating < 1 || req.Rating > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "rating must be between 1 and 10"})
+		return
+	}
+
 	review, err := h.service.Update(c.Request.Context(), reviewID, userID, req)
 	if err != nil {
+		log.Printf("UpdateReview error: %v", err)
 		switch err {
 		case service.ErrReviewNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": "review not found"})
 		case service.ErrInvalidCredentials:
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		}
 		return
 	}
+
 	c.JSON(http.StatusOK, review)
 }
 
@@ -114,16 +140,23 @@ func (h *ReviewHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid review id"})
 		return
 	}
-	userIDStr, _ := c.Get(string(middleware.ContextUserID))
-	userID, err := strconv.Atoi(userIDStr.(string))
-	if err != nil {
+
+	val, ok := c.Get(string(middleware.ContextUserID))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, ok := val.(int)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user"})
 		return
 	}
+
 	roleVal, _ := c.Get(string(middleware.ContextRole))
 	isAdmin := roleVal == "admin"
 
 	if err := h.service.Delete(c.Request.Context(), reviewID, userID, isAdmin); err != nil {
+		log.Printf("DeleteReview error: %v", err)
 		switch err {
 		case service.ErrReviewNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": "review not found"})
@@ -134,5 +167,6 @@ func (h *ReviewHandler) Delete(c *gin.Context) {
 		}
 		return
 	}
+
 	c.Status(http.StatusNoContent)
 }
