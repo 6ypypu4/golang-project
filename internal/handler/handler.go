@@ -13,7 +13,7 @@ import (
 	"golang-project/internal/service"
 )
 
-func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
+func SetupRoutes(db *sql.DB, jwtSecret string, events chan service.ReviewEvent) *gin.Engine {
 	router := router.New()
 
 	v := validator.New()
@@ -27,7 +27,7 @@ func SetupRoutes(db *sql.DB, jwtSecret string) *gin.Engine {
 	reviewRepo := repository.NewReviewRepository(db)
 	genreService := service.NewGenreService(genreRepo, v)
 	movieService := service.NewMovieService(movieRepo, genreRepo, v)
-	reviewService := service.NewReviewService(reviewRepo, movieRepo, v)
+	reviewService := service.NewReviewService(reviewRepo, movieRepo, v, events)
 	genreHandler := NewGenreHandler(genreService)
 	movieHandler := NewMovieHandler(movieService)
 	reviewHandler := NewReviewHandler(reviewService)

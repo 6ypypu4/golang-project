@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 
@@ -35,13 +36,15 @@ type ReviewService struct {
 	reviews   ReviewRepo
 	movies    MovieLookup
 	validator *validator.Validate
+	events    chan<- ReviewEvent
 }
 
-func NewReviewService(reviews ReviewRepo, movies MovieLookup, v *validator.Validate) *ReviewService {
+func NewReviewService(reviews ReviewRepo, movies MovieLookup, v *validator.Validate, events chan<- ReviewEvent) *ReviewService {
 	return &ReviewService{
 		reviews:   reviews,
 		movies:    movies,
 		validator: v,
+		events:    events,
 	}
 }
 
@@ -102,6 +105,13 @@ func (s *ReviewService) Create(ctx context.Context, movieID, userID int, req mod
 		return nil, err
 	}
 	_ = s.movies.UpdateAverageRating(ctx, movieID)
+	s.emitEvent(ReviewEvent{
+		Type:     EventReviewCreated,
+		MovieID:  movieID,
+		UserID:   userID,
+		ReviewID: review.ID,
+		Time:     time.Now(),
+	})
 	return review, nil
 }
 
@@ -131,6 +141,13 @@ func (s *ReviewService) Update(ctx context.Context, id int, userID int, req mode
 		return nil, err
 	}
 	_ = s.movies.UpdateAverageRating(ctx, review.MovieID)
+	s.emitEvent(ReviewEvent{
+		Type:     EventReviewUpdated,
+		MovieID:  review.MovieID,
+		UserID:   review.UserID,
+		ReviewID: review.ID,
+		Time:     time.Now(),
+	})
 	return review, nil
 }
 
@@ -150,5 +167,22 @@ func (s *ReviewService) Delete(ctx context.Context, id int, requester int, isAdm
 		return err
 	}
 	_ = s.movies.UpdateAverageRating(ctx, review.MovieID)
+	s.emitEvent(ReviewEvent{
+		Type:     EventReviewDeleted,
+		MovieID:  review.MovieID,
+		UserID:   review.UserID,
+		ReviewID: review.ID,
+		Time:     time.Now(),
+	})
 	return nil
+}
+
+func (s *ReviewService) emitEvent(e ReviewEvent) {
+	if s.events == nil {
+		return
+	}
+	select {
+	case s.events <- e:
+	default:
+	}
 }
