@@ -2,131 +2,771 @@
   "info": {
     "name": "Golang Project API",
     "_postman_id": "golang-project-api",
-    "description": "Postman collection for movie review API (auth, genres, movies, reviews).",
+    "description": "Postman collection for movie review API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Auth - Register",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/auth/register",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "auth", "register"]
+      "name": "Public",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            }
+          }
         },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"user\",\n  \"password\": \"password123\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Auth - Login (user)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/auth/login",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "auth", "login"]
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
         },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Genres - List",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{base_url}}/api/v1/genres",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "genres"]
-        }
-      }
-    },
-    {
-      "name": "Genres - Create (admin)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/genres",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "genres"]
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
         },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"Drama\"\n}"
-        }
-      }
-    },
-    {
-      "name": "Movies - List",
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{base_url}}/api/v1/movies",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "movies"]
-        }
-      }
-    },
-    {
-      "name": "Movies - Create (admin)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/movies",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "movies"]
+        {
+          "name": "Get Genres",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/genres",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "genres"]
+            }
+          }
         },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"title\": \"Inception\",\n  \"description\": \"Movie\",\n  \"release_year\": 2010,\n  \"director\": \"Nolan\",\n  \"duration_minutes\": 120,\n  \"genre_ids\": [\"1\"]\n}"
+        {
+          "name": "Get Genre by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/genres/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "genres", "1"]
+            }
+          }
+        },
+        {
+          "name": "Get Movies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/movies?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "movies"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "genre",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "genre_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "year",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "min_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Movie by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/movies/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "movies", "1"]
+            }
+          }
+        },
+        {
+          "name": "Get Movie Reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/movies/1/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "movies", "1", "reviews"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "min_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/1/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "users", "1", "reviews"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "min_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
         }
-      }
+      ]
     },
     {
-      "name": "Reviews - Create (user)",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "Authorization", "value": "Bearer {{user_token}}" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/movies/1/reviews",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "movies", "1", "reviews"]
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "me"]
+            }
+          }
         },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"rating\": 9,\n  \"title\": \"Great\",\n  \"content\": \"Nice movie\"\n}"
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newemail@example.com\",\n  \"username\": \"newusername\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"password123\",\n  \"new_password\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/me/password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "me", "password"]
+            }
+          }
+        },
+        {
+          "name": "Get My Reviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "me", "reviews"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "min_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "max_rating",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 9,\n  \"title\": \"Great movie!\",\n  \"content\": \"Really enjoyed this film. Great acting and storyline.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/movies/1/reviews",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "movies", "1", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "Update Review",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 8,\n  \"title\": \"Updated review\",\n  \"content\": \"Changed my mind, still good though\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reviews/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reviews", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Review",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{user_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reviews/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reviews", "1"]
+            }
+          }
         }
-      }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/users?page=1&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "users"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "role",
+                      "value": "",
+                      "disabled": true
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get User by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/users/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "users", "1"]
+                }
+              }
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"updated@example.com\",\n  \"username\": \"updateduser\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/users/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "users", "1"]
+                }
+              }
+            },
+            {
+              "name": "Update User Role",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"role\": \"admin\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/users/1/role",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "users", "1", "role"]
+                }
+              }
+            },
+            {
+              "name": "Delete User",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/users/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "users", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Genres",
+          "item": [
+            {
+              "name": "Create Genre",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Thriller\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/genres",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "genres"]
+                }
+              }
+            },
+            {
+              "name": "Update Genre",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Updated Genre Name\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/genres/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "genres", "1"]
+                }
+              }
+            },
+            {
+              "name": "Delete Genre",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/genres/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "genres", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Movies",
+          "item": [
+            {
+              "name": "Create Movie",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Inception\",\n  \"description\": \"A mind-bending thriller about dreams and reality\",\n  \"release_year\": 2010,\n  \"director\": \"Christopher Nolan\",\n  \"duration_minutes\": 148,\n  \"genre_ids\": [\"1\", \"2\"]\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/movies",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "movies"]
+                }
+              }
+            },
+            {
+              "name": "Update Movie",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Inception (Updated)\",\n  \"description\": \"Updated description\",\n  \"release_year\": 2010,\n  \"director\": \"Christopher Nolan\",\n  \"duration_minutes\": 148,\n  \"genre_ids\": [\"1\", \"2\", \"3\"]\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/movies/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "movies", "1"]
+                }
+              }
+            },
+            {
+              "name": "Delete Movie",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/movies/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "movies", "1"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Stats",
+          "item": [
+            {
+              "name": "Get Stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/stats",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "stats"]
+                }
+              }
+            },
+            {
+              "name": "Get Audit Logs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/audit-logs?page=1&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "audit-logs"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "event",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "user_id",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "from_date",
+                      "value": "",
+                      "description": "Format: YYYY-MM-DD",
+                      "disabled": true
+                    },
+                    {
+                      "key": "to_date",
+                      "value": "",
+                      "description": "Format: YYYY-MM-DD",
+                      "disabled": true
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
-    { "key": "base_url", "value": "http://localhost:8080" },
-    { "key": "admin_token", "value": "" },
-    { "key": "user_token", "value": "" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "user_token",
+      "value": ""
+    }
   ]
 }
-
-

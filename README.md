@@ -1,8 +1,10 @@
 # Golang Project
 
+API для управления фильмами, жанрами и отзывами с системой аутентификации и ролями.
+
 ## Требования
 
-- Go 1.22 или выше
+- Go 1.24 или выше
 - PostgreSQL 16 или выше
 - Docker и Docker Compose (опционально, для упрощенного запуска)
 
@@ -10,18 +12,16 @@
 
 Самый простой способ запустить проект:
 
-1. **Запустите все сервисы (база данных + API):**
+1. **Запустите все сервисы (база данных + API + Admin):**
    ```bash
    docker-compose up -d
    ```
 
-2. **Примените миграции базы данных:**
-   ```bash
-   # Если у вас установлен golang-migrate
-   migrate -path internal/migrations -database "postgres://app:app@localhost:5432/app?sslmode=disable" up
-   ```
+2. **Миграции применяются автоматически** при запуске API сервера.
 
-3. **API будет доступен на:** http://localhost:8080
+3. **Сервисы будут доступны на:**
+   - API: http://localhost:8080
+   - Admin панель: http://localhost:8081
 
 ## Локальный запуск (без Docker)
 
@@ -57,6 +57,7 @@ migrate -path internal/migrations -database "postgres://app:app@localhost:5432/a
 $env:DB_DSN="postgres://app:app@localhost:5432/app?sslmode=disable"
 $env:JWT_SECRET="your-secret-key-here-change-in-production"
 $env:PORT="8080"
+$env:MIGRATIONS_PATH="internal/migrations"
 ```
 
 **Windows (CMD):**
@@ -64,6 +65,7 @@ $env:PORT="8080"
 set DB_DSN=postgres://app:app@localhost:5432/app?sslmode=disable
 set JWT_SECRET=your-secret-key-here-change-in-production
 set PORT=8080
+set MIGRATIONS_PATH=internal/migrations
 ```
 
 **Linux/Mac:**
@@ -71,6 +73,7 @@ set PORT=8080
 export DB_DSN="postgres://app:app@localhost:5432/app?sslmode=disable"
 export JWT_SECRET="your-secret-key-here-change-in-production"
 export PORT="8080"
+export MIGRATIONS_PATH="internal/migrations"
 ```
 
 Или создайте файл `.env` (если используете инструмент для загрузки .env файлов).
@@ -83,17 +86,103 @@ go run cmd/api/main.go
 
 Сервер будет доступен на http://localhost:8080
 
-## Rate limiting
+## API Endpoints
+
+### Публичные endpoints (без аутентификации)
+
+- `GET /api/v1/health` - Проверка здоровья сервиса
+- `POST /api/v1/auth/register` - Регистрация нового пользователя
+- `POST /api/v1/auth/login` - Вход в систему
+- `GET /api/v1/genres` - Список всех жанров
+- `GET /api/v1/genres/:id` - Получить жанр по ID
+- `GET /api/v1/movies` - Список всех фильмов
+- `GET /api/v1/movies/:id` - Получить фильм по ID
+- `GET /api/v1/movies/:id/reviews` - Список отзывов к фильму
+- `GET /api/v1/users/:id/reviews` - Список отзывов пользователя
+
+### Защищенные endpoints (требуется JWT токен)
+
+- `GET /api/v1/me` - Информация о текущем пользователе
+- `PUT /api/v1/me` - Обновление профиля текущего пользователя
+- `PUT /api/v1/me/password` - Изменение пароля
+- `GET /api/v1/me/reviews` - Мои отзывы
+- `POST /api/v1/movies/:id/reviews` - Создать отзыв к фильму
+- `PUT /api/v1/reviews/:id` - Обновить отзыв
+- `DELETE /api/v1/reviews/:id` - Удалить отзыв
+
+### Admin endpoints (требуется роль admin)
+
+- `GET /api/v1/users` - Список всех пользователей
+- `GET /api/v1/users/:id` - Получить пользователя по ID
+- `PUT /api/v1/users/:id` - Обновить пользователя
+- `PUT /api/v1/users/:id/role` - Изменить роль пользователя
+- `DELETE /api/v1/users/:id` - Удалить пользователя
+- `GET /api/v1/stats` - Статистика системы
+- `GET /api/v1/audit-logs` - Логи аудита
+- `POST /api/v1/genres` - Создать жанр
+- `PUT /api/v1/genres/:id` - Обновить жанр
+- `DELETE /api/v1/genres/:id` - Удалить жанр
+- `POST /api/v1/movies` - Создать фильм
+- `PUT /api/v1/movies/:id` - Обновить фильм
+- `DELETE /api/v1/movies/:id` - Удалить фильм
+
+## Аутентификация
+
+API использует JWT токены для аутентификации. После регистрации или входа вы получите токен, который нужно передавать в заголовке:
+
+```
+Authorization: Bearer <your-token>
+```
+
+## Роли пользователей
+
+- **user** - обычный пользователь (по умолчанию)
+  - Может создавать и управлять своими отзывами
+  - Может просматривать фильмы и жанры
+  - Может обновлять свой профиль
+
+- **admin** - администратор
+  - Все права пользователя
+  - Управление пользователями
+  - Управление фильмами и жанрами
+  - Просмотр статистики и логов аудита
+
+## Особенности
+
+### Автоматические миграции
+
+При запуске API сервера миграции базы данных применяются автоматически. Путь к миграциям настраивается через переменную окружения `MIGRATIONS_PATH`.
+
+### Background Workers
+
+Система включает background worker для обработки событий отзывов:
+- Автоматическое обновление среднего рейтинга фильма при создании/обновлении/удалении отзыва
+- Запись событий в audit log
+
+### Audit Logs
+
+Все действия с отзывами (создание, обновление, удаление) логируются в таблицу audit_logs для отслеживания активности пользователей.
+
+### Rate Limiting
 
 В API включён простой in-memory rate limiting middleware:
-
 - лимит: 60 запросов в минуту на один IP-адрес
 - при превышении возвращается `429 Too Many Requests` с телом:
   - `{"error":"rate limit exceeded"}`
 
-Логика находится в `internal/middleware/ratelimit.go` и подключена глобально для всех HTTP-запросов.
 
-## Postman collection
+### Middleware
+
+API использует следующие middleware:
+- Request ID - уникальный ID для каждого запроса
+- Logger - логирование запросов
+- Rate Limit - ограничение частоты запросов
+- CORS - настройка CORS заголовков
+- Body Limit - ограничение размера тела запроса (1MB)
+- Auth - проверка JWT токена
+- Role-based access control - проверка ролей для admin endpoints
+
+## Postman Collection
 
 В корне репозитория лежит файл `postman_collection.json` с примерными запросами:
 
@@ -117,6 +206,7 @@ go run cmd/api/main.go
 | `PORT` | Порт для API сервера | Нет | `8080` |
 | `DB_DSN` | Строка подключения к PostgreSQL | Да | - |
 | `JWT_SECRET` | Секретный ключ для JWT токенов | Да | - |
+| `MIGRATIONS_PATH` | Путь к файлам миграций | Нет | `internal/migrations` |
 
 ## Структура проекта
 
@@ -135,6 +225,20 @@ golang-project/
 │   ├── router/       # Роутинг
 │   └── service/      # Бизнес-логика
 └── pkg/              # Публичные пакеты
+```
+
+## Тестирование
+
+Для запуска тестов:
+
+```bash
+go test ./...
+```
+
+Для запуска тестов с покрытием:
+
+```bash
+go test -cover ./...
 ```
 
 ## Остановка сервисов
