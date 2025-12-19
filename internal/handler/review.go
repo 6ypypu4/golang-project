@@ -138,7 +138,7 @@ func (h *ReviewHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if req.Rating < 1 || req.Rating > 10 {
+	if req.Rating != 0 && (req.Rating < 1 || req.Rating > 10) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "rating must be between 1 and 10"})
 		return
 	}
